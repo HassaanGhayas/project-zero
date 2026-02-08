@@ -7,12 +7,23 @@
 
 ## Communication Rules
 
-Guidelines for email/message handling (Bronze Tier foundation, no email MCP integration yet).
+Guidelines for email/message handling and approval thresholds.
 
-- Auto-reply to known contacts: disabled
-- Flag messages from unknown senders: yes
-- Response tone: professional
-- Archive handled messages: enabled
+### Email Actions
+
+- **Known contacts** (in whitelist): Auto-send replies < 500 characters
+- **Unknown senders**: Always require human approval
+- **Bulk sends** (>5 recipients): Always require human approval
+- **Email with attachments**: Require human approval
+- **Response tone**: Professional, concise
+- **Archive handled messages**: Enabled
+
+### Social Media Posts
+
+- **Scheduled posts**: Auto-execute if pre-approved in content calendar
+- **Replies to DMs**: Always require human approval
+- **Comments on public posts**: Always require human approval
+- **Posts mentioning money/pricing**: Always require human approval
 
 ---
 
@@ -63,11 +74,25 @@ Contacts requiring human approval for ALL actions (Bronze Tier: file system only
 
 ## Financial Rules
 
-Payment and accounting thresholds (deferred to Silver Tier - Bronze has no payment integration).
+Payment and accounting thresholds with approval requirements.
 
-- Flag payments > $500 (Silver Tier feature)
-- Flag recurring subscriptions > $100/month (Silver Tier feature)
-- Auto-log routine expenses < $50 (Silver Tier feature)
+### Payment Actions
+
+- **Recurring payments** < $50 to **known vendors**: Auto-approve
+- **Recurring payments** ≥ $50 OR to **new payees**: Require human approval
+- **One-time payments** < $100 to **known vendors**: Auto-approve
+- **One-time payments** ≥ $100: Always require human approval
+- **International transfers**: Always require human approval
+- **Banking credential changes**: Always require human approval
+
+### Accounting Actions
+
+- **Expense logging** < $50: Auto-categorize and log
+- **Expense logging** ≥ $50: Require human review
+- **Invoice generation**: Auto-generate for approved contracts
+- **Invoice sending**: Require human approval before send
+- **Subscription audits**: Flag unused subscriptions (no login 30+ days)
+- **Budget alerts**: Notify if category exceeds 80% of monthly budget
 
 ---
 

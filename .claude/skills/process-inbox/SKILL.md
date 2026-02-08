@@ -7,14 +7,14 @@ color: blue
 
 # Process Inbox Skill
 
-You are processing the AI Employee's inbox. This skill handles all pending action files in `Needs_Action/`, applies the company handbook rules, and routes items to either `Done/` (auto-completed) or `Pending_Approval/` (requiring human review).
+You are processing the AI Employee's inbox. This skill handles all pending action files in `Needs_Action/`, applies the company handbook rules, and routes items to either `Done/` (auto-completed) or `Approved/` (requiring human review).
 
 ## Prerequisites Check
 
 Before processing, you MUST validate:
 
 1. **Vault exists**: Check that `AI_Employee_Vault/` directory exists and is accessible
-2. **Required folders exist**: Verify `Needs_Action/`, `Done/`, `Pending_Approval/`, `Logs/` are present
+2. **Required folders exist**: Verify `Needs_Action/`, `Done/`, `Approved/`, `Logs/` are present
 3. **Company Handbook exists**: Confirm `Company_Handbook.md` is readable
 4. **No emergency stop**: Verify `EMERGENCY_STOP.md` does NOT exist in vault root
 
@@ -25,6 +25,16 @@ If any precondition fails, abort processing and report the issue to the user.
 Follow these steps in order:
 
 ### Step 1: Check for Emergency Stop
+
+**IMPORTANT**: The process-inbox skill is now deprecated in favor of the real-time approval workflow.
+
+**New Workflow**:
+- Files in Needs_Action/ are approved by editing YAML: `status: approved`
+- Status field watcher moves files to Approved/ automatically
+- Approved watcher executes actions immediately
+- Confirmations created in In_Progress/ for final user review
+
+**This skill is retained for manual batch processing only.**
 
 ```bash
 # Check if EMERGENCY_STOP.md exists
@@ -101,7 +111,7 @@ ELSE IF type in ["image"] AND size < 10485760:  # 10MB
 ELSE IF type in ["document"]:
     confidence = "medium"
     action = "flag-for-review"
-    destination = "Pending_Approval/"
+    destination = "Approved/"
     reason = "Document requires human review"
 ```
 
@@ -110,13 +120,13 @@ ELSE IF type in ["document"]:
 ELSE IF type == "unknown" OR category == "unknown":
     confidence = "low"
     action = "flag-for-review"
-    destination = "Pending_Approval/"
+    destination = "Approved/"
     reason = "Unknown file type requires approval"
 
 ELSE IF size > 10485760:  # > 10MB
     confidence = "medium"
     action = "flag-for-review"
-    destination = "Pending_Approval/"
+    destination = "Approved/"
     reason = "Large file requires review"
 ```
 
@@ -151,7 +161,7 @@ ELSE IF size > 10485760:  # > 10MB
 1. Read the entire file content
 2. Update YAML frontmatter: `status: pending` → `status: flagged`
 3. Add a note to the markdown body explaining why it was flagged
-4. Move file from `Needs_Action/` to `Pending_Approval/`
+4. Move file from `Needs_Action/` to `Approved/`
 5. Log action:
    ```json
    {
@@ -159,7 +169,7 @@ ELSE IF size > 10485760:  # > 10MB
      "action_id": "skill_inbox_NNN",
      "action_type": "item_flagged",
      "actor": "process-inbox",
-     "target": "Pending_Approval/FILE_xxx.md",
+     "target": "Approved/FILE_xxx.md",
      "parameters": {
        "source": "Needs_Action/FILE_xxx.md",
        "category": "document",
@@ -205,7 +215,7 @@ Format output as:
   - FILE_xxx.md (text file, size)
   - FILE_yyy.md (data file, size)
 
-⚠️  Flagged for Approval (moved to Pending_Approval/):
+⚠️  Flagged for Approval (moved to Approved/):
   - FILE_zzz.md (reason)
 
 📋 Dashboard updated with current queue status
@@ -282,12 +292,12 @@ This skill implements:
 - ✅ **Section IV**: Skills-based AI functionality
 - ✅ **Section VII**: Comprehensive audit logging
 - ✅ **Section IX**: No autonomous actions (only after explicit invocation)
-- ✅ **Section XII**: HITL enforcement via Pending_Approval/ folder
+- ✅ **Section XII**: HITL enforcement via Approved/ folder
 - ✅ **Section XII**: Emergency stop mechanism
 
 ## Notes
 
 - This is a **Bronze Tier** skill: File-based categorization only, no external APIs
-- Human oversight required for flagged items in Pending_Approval/
+- Human oversight required for flagged items in Approved/
 - All decisions are based on Company_Handbook.md rules (no hardcoded logic)
 - Idempotent: Safe to run multiple times (already-processed items have status != pending)

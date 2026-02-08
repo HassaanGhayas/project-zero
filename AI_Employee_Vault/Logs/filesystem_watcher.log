@@ -1,0 +1,22 @@
+[2026-02-08 16:58:35] INFO: ============================================================
+[2026-02-08 16:58:35] INFO: AI FTE File System Watcher
+[2026-02-08 16:58:35] INFO: ============================================================
+[2026-02-08 16:58:35] INFO: Vault path: /home/hasss/projects/project-zero/AI_Employee_Vault
+[2026-02-08 16:58:35] INFO: Inbox path: /home/hasss/projects/project-zero/AI_Employee_Vault/Inbox
+[2026-02-08 16:58:35] INFO: Log level: DEBUG
+[2026-02-08 16:58:35] INFO: ============================================================
+[2026-02-08 16:58:35] INFO: Watcher started - monitoring: /home/hasss/projects/project-zero/AI_Employee_Vault/Inbox
+[2026-02-08 16:58:35] INFO: Press Ctrl+C to stop
+[2026-02-08 16:59:39] INFO: ============================================================
+[2026-02-08 16:59:39] INFO: AI FTE File System Watcher
+[2026-02-08 16:59:39] INFO: ============================================================
+[2026-02-08 16:59:39] INFO: Vault path: /home/hasss/projects/project-zero/AI_Employee_Vault
+[2026-02-08 16:59:39] INFO: Inbox path: /home/hasss/projects/project-zero/AI_Employee_Vault/Inbox
+[2026-02-08 16:59:39] INFO: Log level: DEBUG
+[2026-02-08 16:59:39] INFO: ============================================================
+[2026-02-08 16:59:39] INFO: Watcher started - monitoring: /home/hasss/projects/project-zero/AI_Employee_Vault/Inbox
+[2026-02-08 16:59:39] INFO: Press Ctrl+C to stop
+[2026-02-08 17:07:16] INFO: File detected: invoice_1770552436.txt
+[2026-02-08 17:07:16] INFO: Action file created: FILE_invoice_1770552436.txt.md
+[2026-02-08 17:09:35] INFO: Received SIGINT, shutting down gracefully...
+[2026-02-08 17:09:35] INFO: Watcher stopped

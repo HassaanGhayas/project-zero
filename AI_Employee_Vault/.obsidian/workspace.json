@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Company_Handbook.md",
+                "file": "In_Progress/CONFIRM_FILE_test_sample_invoice.txt.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Company_Handbook"
+              "title": "CONFIRM_FILE_test_sample_invoice.txt"
             }
           }
         ]
@@ -181,5 +181,12 @@
     }
   },
   "active": "a21213d95e7f8bf4",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "Needs_Action/FILE_invoice_1770552436.txt.md",
+    "Needs_Action/FILE_test_sample_invoice.txt.md",
+    "In_Progress/EXECUTED_FILE_test_sample_invoice.txt_2026-02-08T15-30-19Z.md",
+    "In_Progress/CONFIRM_FILE_test_sample_invoice.txt.md",
+    "Approved/FILE_test_sample_invoice.txt.md",
+    "Company_Handbook.md"
+  ]
 }
