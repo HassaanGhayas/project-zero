@@ -1,0 +1,6 @@
+date,customer_id,product,amount,status
+2026-01-15,CUST001,Enterprise,5000,paid
+2026-01-20,CUST002,Professional,2500,paid
+2026-01-25,CUST003,Starter,500,pending
+2026-02-01,CUST001,Enterprise,5000,paid
+2026-02-05,CUST004,Professional,2500,processing

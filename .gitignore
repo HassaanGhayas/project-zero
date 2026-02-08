@@ -1,0 +1,49 @@
+# Secrets - NEVER commit (Constitution Section V)
+.env
+.env.*
+credentials.json
+*.key
+*.pem
+*.secret
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# UV
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Obsidian internal
+AI_Employee_Vault/.obsidian/workspace.json
+AI_Employee_Vault/.obsidian/plugins/
+AI_Employee_Vault/.obsidian/themes/
+
+# Vault operational data (Constitution Section V)
+AI_Employee_Vault/Logs/*.json
+AI_Employee_Vault/Inbox/*
+AI_Employee_Vault/Needs_Action/*
+!AI_Employee_Vault/Inbox/.gitkeep
+!AI_Employee_Vault/Needs_Action/.gitkeep
+
+# Temporary files
+*.tmp
+*.bak
+
+# Process manager
+/tmp/*.pid

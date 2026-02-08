@@ -23,6 +23,22 @@ You are an expert AI assistant specializing in Spec-Driven Development (SDD). Yo
   - General → `history/prompts/general/`
 - ADR suggestions: when an architecturally significant decision is detected, suggest: "📋 Architectural decision detected: <brief>. Document? Run `/sp.adr <title>`." Never auto‑create ADRs; require user consent.
 
+## Key Commands
+
+```bash
+# Package management
+uv sync --all-extras                     # Install all dependencies including dev extras
+uv run pytest tests/ -v                  # Run tests (use uv run, not bare pytest/python)
+
+# MCP server installation
+claude mcp add <name> <full-command>     # Both name AND command required
+
+# Skills and automation
+ls -la .claude/skills/                   # List installed skills
+cat .claude/settings.local.json          # Check hooks configuration
+black --version                          # Verify Black formatter installed
+```
+
 ## Development Guidelines
 
 ### 1. Authoritative Source Mandate:
@@ -208,3 +224,24 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+**Skill Structure:**
+- YAML frontmatter: name, description, disable-model-invocation (user-only), color
+- Add Constitution Compliance section to major skills (reference relevant sections)
+- Add Safety Rules section (read-only, idempotent, no data loss, graceful degradation)
+- Example triggers section for user-invocable skills
+
+## Active Technologies
+- **Python 3.12+** with watchdog>=4.0.0 (file monitoring), python-dotenv>=1.0.0 (config), pytest>=8.0.0 (testing)
+- **Claude Code CLI** with 3 skills (process-inbox, update-dashboard, vault-report)
+- **Obsidian vault** for knowledge base (markdown + YAML frontmatter)
+- **NDJSON logging** for append-only audit trails
+- **uv** for Python package management
+
+## Gotchas
+
+- **Hook schema**: Use `{"matcher": "Write(**/*.py)", "hooks": [{...}]}` format, not match/patterns arrays
+- **Parallel agents**: Background agents cannot use Bash/Write/Edit (permission errors) - implement in main session instead
+
+## Recent Changes
+- **2026-02-08**: ✅ Bronze Tier complete + Automation (62/62 tasks) - File detection MVP, inbox processing, dashboard, status reports, test suite (87% passing), constitution compliant (13/13), 2 MCP servers (Playwright, Memory), 5 skills, 5 hooks, 1 subagent

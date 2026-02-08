@@ -1,0 +1,16 @@
+# Q4 2025 Sales Report
+
+## Summary
+- Total Revenue: $150,000
+- New Customers: 12
+- Average Deal Size: $12,500
+
+## Top Products
+1. Enterprise Plan - $75,000
+2. Professional Plan - $45,000
+3. Starter Plan - $30,000
+
+## Next Quarter Goals
+- Increase revenue by 20%
+- Acquire 15 new customers
+- Launch new pricing tier

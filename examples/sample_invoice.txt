@@ -1,0 +1,15 @@
+INVOICE #12345
+Date: 2026-02-08
+
+Bill To:
+Acme Corp
+123 Main St
+City, State 12345
+
+Items:
+- Consulting Services: $500.00
+- Software License: $250.00
+
+Total: $750.00
+
+Payment Terms: Net 30
