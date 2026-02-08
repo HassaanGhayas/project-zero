@@ -1,0 +1,58 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context7_context7__query-docs"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write(**/.env*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '❌ Direct .env edits blocked by Constitution Section V. Use environment configuration tools.' && exit 1"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(**/.env*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '❌ Direct .env edits blocked by Constitution Section V. Use environment configuration tools.' && exit 1"
+          }
+        ]
+      },
+      {
+        "matcher": "Write(**/EMERGENCY_STOP.md)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '❌ Use /emergency-halt skill to trigger emergency stop.' && exit 1"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write(**/*.py)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "black {{file_path}} --line-length 88 --quiet || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(**/*.py)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "black {{file_path}} --line-length 88 --quiet || true"
+          }
+        ]
+      }
+    ]
+  }
+}
