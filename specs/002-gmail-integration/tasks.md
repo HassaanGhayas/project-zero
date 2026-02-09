@@ -23,11 +23,11 @@
 
 **Purpose**: Project initialization and Gmail API infrastructure
 
-- [ ] T001 Add Gmail API dependencies to pyproject.toml (google-auth ^2.28.0, google-auth-oauthlib ^1.2.0, google-api-python-client ^2.118.0)
-- [ ] T002 Run uv sync to install new dependencies
-- [ ] T003 [P] Create scripts/ directory in project root
-- [ ] T004 [P] Create config/ directory in project root for known_contacts.yaml
-- [ ] T005 [P] Add Gmail environment variables to .env.example (GMAIL_CREDENTIALS_PATH, GMAIL_TOKEN_PATH, GMAIL_CHECK_INTERVAL)
+- [X] T001 Add Gmail API dependencies to pyproject.toml (google-auth ^2.28.0, google-auth-oauthlib ^1.2.0, google-api-python-client ^2.118.0)
+- [X] T002 Run uv sync to install new dependencies
+- [X] T003 [P] Create scripts/ directory in project root
+- [X] T004 [P] Create config/ directory in project root for known_contacts.yaml
+- [X] T005 [P] Add Gmail environment variables to .env.example (GMAIL_CREDENTIALS_PATH, GMAIL_TOKEN_PATH, GMAIL_CHECK_INTERVAL)
 
 **Checkpoint**: Basic project structure ready for Gmail integration
 
@@ -39,11 +39,11 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T006 Create scripts/setup_gmail_oauth.py for OAuth2 authentication flow
-- [ ] T007 Create known_contacts.yaml template in config/known_contacts.yaml with structure (email, name, category, priority_override)
-- [ ] T008 Update AI_Employee_Vault/Company_Handbook.md with Gmail-specific approval rules (email section with auto-approve criteria and known contacts whitelist reference)
-- [ ] T009 Create src/mcp/gmail_server.py MCP server with archive_email and mark_as_read tool stubs
-- [ ] T010 Register Gmail MCP server in .claude/settings.local.json with mcp_servers array entry
+- [X] T006 Create scripts/setup_gmail_oauth.py for OAuth2 authentication flow
+- [X] T007 Create known_contacts.yaml template in config/known_contacts.yaml with structure (email, name, category, priority_override)
+- [X] T008 Update AI_Employee_Vault/Company_Handbook.md with Gmail-specific approval rules (email section with auto-approve criteria and known contacts whitelist reference)
+- [X] T009 Create src/mcp/gmail_server.py MCP server with archive_email and mark_as_read tool stubs
+- [X] T010 Register Gmail MCP server via claude mcp add command (registered in ~/.claude.json)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
