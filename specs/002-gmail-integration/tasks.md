@@ -57,15 +57,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Create src/watchers/gmail_watcher.py extending BaseWatcher class with __init__, check_for_updates, and create_action_file methods
-- [ ] T012 [US1] Implement Gmail API client initialization in gmail_watcher.py with OAuth2 credentials loading from .env
-- [ ] T013 [US1] Implement check_for_updates() method to poll Gmail API every 120 seconds with query "is:unread is:important label:inbox"
-- [ ] T014 [US1] Implement message ID tracking with _processed_message_ids set to prevent duplicates across watcher restarts
-- [ ] T015 [US1] Implement create_action_file() method to generate markdown action files with YAML frontmatter (type: email, gmail_message_id, sender, subject, snippet, status: pending, priority, received timestamp)
-- [ ] T016 [US1] Add exponential backoff logic for Gmail API rate limit errors (HTTP 429) - double check_interval up to max 3600 seconds
-- [ ] T017 [US1] Add NDJSON audit logging for email_detected events with full context (sender, subject, message_id)
-- [ ] T018 [US1] Integrate gmail_watcher into src/watchers/run_all_watchers.py orchestrator (instantiate GmailWatcher and add to watchers list)
-- [ ] T019 [US1] Add graceful error handling for OAuth token expiration with clear re-authentication instructions in logs
+- [X] T011 [P] [US1] Create src/watchers/gmail_watcher.py extending BaseWatcher class with __init__, check_for_updates, and create_action_file methods
+- [X] T012 [US1] Implement Gmail API client initialization in gmail_watcher.py with OAuth2 credentials loading from .env
+- [X] T013 [US1] Implement check_for_updates() method to poll Gmail API every 120 seconds with query "is:unread is:important label:inbox"
+- [X] T014 [US1] Implement message ID tracking with _processed_message_ids set to prevent duplicates across watcher restarts
+- [X] T015 [US1] Implement create_action_file() method to generate markdown action files with YAML frontmatter (type: email, gmail_message_id, sender, subject, snippet, status: pending, priority, received timestamp)
+- [X] T016 [US1] Add exponential backoff logic for Gmail API rate limit errors (HTTP 429) - double check_interval up to max 3600 seconds
+- [X] T017 [US1] Add NDJSON audit logging for email_detected events with full context (sender, subject, message_id)
+- [X] T018 [US1] Integrate gmail_watcher into src/watchers/run_all_watchers.py orchestrator (instantiate GmailWatcher and add to watchers list)
+- [X] T019 [US1] Add graceful error handling for OAuth token expiration with clear re-authentication instructions in logs
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - emails detected and converted to action files
 
