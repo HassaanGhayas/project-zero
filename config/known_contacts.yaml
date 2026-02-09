@@ -18,33 +18,63 @@
 #   5. If email contains financial keywords: always "high"
 
 known_contacts:
-  # Example: Trusted client (medium priority by default)
-  # - email: "alice@example.com"
-  #   name: "Alice Smith"
-  #   category: "client"
-  #   priority_override: null  # null = use default logic (medium)
-  #   notes: "Key account manager - responds within 24h"
+  # Trusted clients (medium priority by default)
+  - email: "alice.client@example.com"
+    name: "Alice Smith"
+    category: "client"
+    priority_override: null  # null = use default logic (medium)
+    notes: "Key account manager - responds within 24h"
 
-  # Example: Internal team member (medium priority)
-  # - email: "bob@company.com"
-  #   name: "Bob Johnson"
-  #   category: "internal"
-  #   priority_override: "medium"
-  #   notes: "Engineering lead"
+  - email: "charlie.client@acmecorp.com"
+    name: "Charlie Brown"
+    category: "client"
+    priority_override: "medium"
+    notes: "Project lead for ACME integration"
 
-  # Example: Newsletter (always low priority)
-  # - email: "noreply@newsletter.com"
-  #   name: "Tech Weekly Newsletter"
-  #   category: "newsletter"
-  #   priority_override: "low"
-  #   notes: "Subscribed 2025-01-01, review monthly"
+  # Internal team members (medium priority)
+  - email: "bob@company.com"
+    name: "Bob Johnson"
+    category: "internal"
+    priority_override: "medium"
+    notes: "Engineering lead"
 
-  # Example: Vendor (high priority for important updates)
-  # - email: "support@vendor.com"
-  #   name: "Vendor Support"
-  #   category: "vendor"
-  #   priority_override: "high"
-  #   notes: "Critical infrastructure provider"
+  - email: "sarah@company.com"
+    name: "Sarah Davis"
+    category: "internal"
+    priority_override: null
+    notes: "Product manager"
+
+  # Newsletters (always low priority)
+  - email: "noreply@techweekly.com"
+    name: "Tech Weekly Newsletter"
+    category: "newsletter"
+    priority_override: "low"
+    notes: "Subscribed 2025-01-01, review monthly"
+
+  - email: "updates@github.com"
+    name: "GitHub Notifications"
+    category: "newsletter"
+    priority_override: "low"
+    notes: "Automated notifications"
+
+  - email: "no-reply@linkedin.com"
+    name: "LinkedIn Updates"
+    category: "newsletter"
+    priority_override: "low"
+    notes: "Weekly digest emails"
+
+  # Vendors (high priority for important updates)
+  - email: "support@cloudvendor.com"
+    name: "Cloud Vendor Support"
+    category: "vendor"
+    priority_override: "high"
+    notes: "Critical infrastructure provider - SLA: 1 hour response"
+
+  - email: "billing@stripe.com"
+    name: "Stripe Billing"
+    category: "vendor"
+    priority_override: "high"
+    notes: "Payment processor - financial alerts"
 
 # Financial keywords that trigger "financial" category
 # Emails containing these words in subject/snippet are always high priority

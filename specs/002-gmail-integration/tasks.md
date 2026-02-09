@@ -121,15 +121,15 @@
 
 ### Implementation for User Story 4
 
-- [ ] T034 [P] [US4] Populate config/known_contacts.yaml with sample known contacts (email, name, category: client/newsletter/internal/vendor, priority_override: medium/low)
-- [ ] T035 [P] [US4] Add financial_keywords array to config/known_contacts.yaml (payment, invoice, billing, transaction, refund, subscription)
-- [ ] T036 [US4] Create src/watchers/email_categorizer.py module with determine_priority() function
-- [ ] T037 [US4] Implement known_contacts.yaml loading and parsing in email_categorizer.py with fallback to empty whitelist if file missing
-- [ ] T038 [US4] Implement priority determination logic: high (unknown sender OR has_attachments OR financial_keywords match), medium (known sender + no attachments), low (newsletters/automated)
-- [ ] T039 [US4] Integrate email_categorizer into gmail_watcher.py create_action_file() method to set priority field
-- [ ] T040 [US4] Add attachment detection to gmail_watcher.py (check message payload for attachments, set has_attachments and attachment_count fields)
-- [ ] T041 [US4] Add financial keyword detection to gmail_watcher.py (scan subject + snippet for keywords, set category: financial if match)
-- [ ] T042 [US4] Generate priority-appropriate suggested actions in action file markdown body based on categorization results
+- [X] T034 [P] [US4] Populate config/known_contacts.yaml with sample known contacts (email, name, category: client/newsletter/internal/vendor, priority_override: medium/low)
+- [X] T035 [P] [US4] Add financial_keywords array to config/known_contacts.yaml (payment, invoice, billing, transaction, refund, subscription)
+- [X] T036 [US4] Create src/watchers/email_categorizer.py module with determine_priority() function
+- [X] T037 [US4] Implement known_contacts.yaml loading and parsing in email_categorizer.py with fallback to empty whitelist if file missing
+- [X] T038 [US4] Implement priority determination logic: high (unknown sender OR has_attachments OR financial_keywords match), medium (known sender + no attachments), low (newsletters/automated)
+- [X] T039 [US4] Integrate email_categorizer into gmail_watcher.py create_action_file() method to set priority field
+- [X] T040 [US4] Add attachment detection to gmail_watcher.py (check message payload for attachments, set has_attachments and attachment_count fields)
+- [X] T041 [US4] Add financial keyword detection to gmail_watcher.py (scan subject + snippet for keywords, set category: financial if match)
+- [X] T042 [US4] Generate priority-appropriate suggested actions in action file markdown body based on categorization results
 
 **Checkpoint**: All user stories complete - full Gmail integration with intelligent prioritization
 
