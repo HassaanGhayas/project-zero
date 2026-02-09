@@ -99,15 +99,15 @@
 
 ### Implementation for User Story 3
 
-- [ ] T025 [P] [US3] Implement archive_email tool in src/mcp/gmail_server.py (accepts message_id, calls Gmail API users().messages().modify() to remove INBOX label)
-- [ ] T026 [P] [US3] Implement mark_as_read tool in src/mcp/gmail_server.py (accepts message_id, calls Gmail API users().messages().modify() to remove UNREAD label)
-- [ ] T027 [US3] Add error handling to MCP tools with structured error responses (NOT_FOUND, AUTH_ERROR, RATE_LIMIT, NETWORK_ERROR, PERMISSION_DENIED)
-- [ ] T028 [US3] Implement idempotency for archive_email and mark_as_read tools (return success if already archived/read)
-- [ ] T029 [US3] Add NDJSON audit logging to MCP tools for all Gmail API calls with result status
-- [ ] T030 [US3] Update src/watchers/approved_watcher.py to detect email action files (type: email) in Approved/ folder
-- [ ] T031 [US3] Implement _execute_email_action() method in approved_watcher.py to call Gmail MCP server with gmail_message_id
-- [ ] T032 [US3] Add confirmation file generation in In_Progress/ after email execution with result, timestamp, Gmail API response
-- [ ] T033 [US3] Add audit logging for email_executed events with MCP server response and execution status
+- [X] T025 [P] [US3] Implement archive_email tool in src/mcp/gmail_server.py (accepts message_id, calls Gmail API users().messages().modify() to remove INBOX label)
+- [X] T026 [P] [US3] Implement mark_as_read tool in src/mcp/gmail_server.py (accepts message_id, calls Gmail API users().messages().modify() to remove UNREAD label)
+- [X] T027 [US3] Add error handling to MCP tools with structured error responses (NOT_FOUND, AUTH_ERROR, RATE_LIMIT, NETWORK_ERROR, PERMISSION_DENIED)
+- [X] T028 [US3] Implement idempotency for archive_email and mark_as_read tools (return success if already archived/read)
+- [X] T029 [US3] Add NDJSON audit logging to MCP tools for all Gmail API calls with result status
+- [X] T030 [US3] Update src/watchers/approved_watcher.py to detect email action files (type: email) in Approved/ folder
+- [X] T031 [US3] Implement _execute_email_action() method in approved_watcher.py to call Gmail MCP server with gmail_message_id
+- [X] T032 [US3] Add confirmation file generation in In_Progress/ after email execution with result, timestamp, Gmail API response
+- [X] T033 [US3] Add audit logging for email_executed events with MCP server response and execution status
 
 **Checkpoint**: At this point, all core user stories (1-3) should be functional - full email workflow from detection to execution
 

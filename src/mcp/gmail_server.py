@@ -53,6 +53,11 @@ class GmailMCPServer:
         self.service = None
         self.creds = None
 
+        # Setup audit logging (T029)
+        self.vault_path = Path(os.getenv('VAULT_PATH', str(Path.cwd() / 'AI_Employee_Vault')))
+        self.logs_path = self.vault_path / 'Logs'
+        self.logs_path.mkdir(parents=True, exist_ok=True)
+
     def _initialize_service(self) -> bool:
         """
         Initialize Gmail API service with OAuth2 credentials.
@@ -95,6 +100,32 @@ class GmailMCPServer:
         }
         print(json.dumps(error_log), file=sys.stderr)
 
+    def _log_audit_event(self, event_type: str, context: Dict[str, Any], status: str) -> None:
+        """
+        Log event to NDJSON audit trail (T029).
+
+        Args:
+            event_type: Event type identifier (gmail_archive, gmail_mark_read)
+            context: Event-specific context data
+            status: success | error
+        """
+        from datetime import date
+
+        today = date.today().isoformat()
+        log_file = self.logs_path / f"{today}.json"
+
+        entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "event_type": event_type,
+            "actor": "gmail_mcp_server",
+            "status": status,
+            **context
+        }
+
+        # Append to NDJSON log file
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + '\n')
+
     def archive_email(self, message_id: str) -> Dict[str, Any]:
         """
         Archive Gmail message (remove from INBOX, preserve in All Mail).
@@ -127,12 +158,14 @@ class GmailMCPServer:
 
             # If already archived (no INBOX label), return success
             if 'INBOX' not in current_labels:
-                return {
+                result = {
                     "status": "success",
                     "action": "already_archived",
                     "message_id": message_id,
                     "timestamp": datetime.utcnow().isoformat() + "Z"
                 }
+                self._log_audit_event("gmail_archive", {"message_id": message_id, "action": "already_archived"}, "success")
+                return result
 
             # Remove INBOX label to archive
             self.service.users().messages().modify(
@@ -143,12 +176,14 @@ class GmailMCPServer:
                 }
             ).execute()
 
-            return {
+            result = {
                 "status": "success",
                 "action": "archived",
                 "message_id": message_id,
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
+            self._log_audit_event("gmail_archive", {"message_id": message_id, "action": "archived"}, "success")
+            return result
 
         except HttpError as e:
             error_code = "NETWORK_ERROR"
@@ -164,20 +199,26 @@ class GmailMCPServer:
                 error_code = "RATE_LIMIT"
                 error_message = "Gmail API rate limit exceeded. Implement exponential backoff."
 
-            return {
+            result = {
                 "status": "error",
                 "error_code": error_code,
                 "error_message": error_message,
                 "message_id": message_id
             }
+            # Log error to audit trail
+            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error_code": error_code, "error_message": error_message}, "error")
+            return result
 
         except Exception as e:
-            return {
+            result = {
                 "status": "error",
                 "error_code": "NETWORK_ERROR",
                 "error_message": str(e),
                 "message_id": message_id
             }
+            # Log error to audit trail
+            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error": str(e)}, "error")
+            return result
 
     def mark_as_read(self, message_id: str) -> Dict[str, Any]:
         """
@@ -211,12 +252,14 @@ class GmailMCPServer:
 
             # If already marked as read (no UNREAD label), return success
             if 'UNREAD' not in current_labels:
-                return {
+                result = {
                     "status": "success",
                     "action": "already_marked_as_read",
                     "message_id": message_id,
                     "timestamp": datetime.utcnow().isoformat() + "Z"
                 }
+                self._log_audit_event("gmail_mark_read", {"message_id": message_id, "action": "already_marked_as_read"}, "success")
+                return result
 
             # Remove UNREAD label to mark as read
             self.service.users().messages().modify(
@@ -227,12 +270,14 @@ class GmailMCPServer:
                 }
             ).execute()
 
-            return {
+            result = {
                 "status": "success",
                 "action": "marked_as_read",
                 "message_id": message_id,
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
+            self._log_audit_event("gmail_mark_read", {"message_id": message_id, "action": "marked_as_read"}, "success")
+            return result
 
         except HttpError as e:
             error_code = "NETWORK_ERROR"
@@ -248,20 +293,26 @@ class GmailMCPServer:
                 error_code = "RATE_LIMIT"
                 error_message = "Gmail API rate limit exceeded. Implement exponential backoff."
 
-            return {
+            result = {
                 "status": "error",
                 "error_code": error_code,
                 "error_message": error_message,
                 "message_id": message_id
             }
+            # Log error to audit trail
+            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error_code": error_code, "error_message": error_message}, "error")
+            return result
 
         except Exception as e:
-            return {
+            result = {
                 "status": "error",
                 "error_code": "NETWORK_ERROR",
                 "error_message": str(e),
                 "message_id": message_id
             }
+            # Log error to audit trail
+            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error": str(e)}, "error")
+            return result
 
     def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
