@@ -254,16 +254,28 @@ class StatusFieldWatcher(FileSystemEventHandler):
 
                     duration_ms = int((time.time() - start_time) * 1000)
 
+                    # Build parameters with email-specific metadata if present
+                    log_parameters = {
+                        "source": str(source_path),
+                        "destination": str(destination_folder),
+                        "old_status": "pending",
+                        "new_status": new_status,
+                    }
+
+                    # Include email-specific metadata for audit trail (T024)
+                    if frontmatter.get("type") == "email":
+                        log_parameters.update({
+                            "gmail_message_id": frontmatter.get("gmail_message_id"),
+                            "sender": frontmatter.get("sender"),
+                            "subject": frontmatter.get("subject"),
+                            "priority": frontmatter.get("priority"),
+                        })
+
                     # Log successful move
                     self._log_action(
                         action_type="file_moved",
                         target=str(destination_path),
-                        parameters={
-                            "source": str(source_path),
-                            "destination": str(destination_folder),
-                            "old_status": "pending",
-                            "new_status": new_status,
-                        },
+                        parameters=log_parameters,
                         duration=duration_ms
                     )
 

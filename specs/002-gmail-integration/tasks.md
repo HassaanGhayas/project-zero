@@ -81,11 +81,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Verify status_field_watcher.py detects YAML status changes in email action files (type: email)
-- [ ] T021 [US2] Test file movement from Needs_Action/ to Approved/ when status changed to "approved"
-- [ ] T022 [US2] Test file movement from Needs_Action/ to Rejected/ when status changed to "rejected"
-- [ ] T023 [US2] Verify EMERGENCY_STOP.md detection prevents file movement when emergency stop is active
-- [ ] T024 [US2] Verify audit logging for file_moved events includes email-specific metadata (gmail_message_id, sender)
+- [X] T020 [US2] Verify status_field_watcher.py detects YAML status changes in email action files (type: email)
+- [X] T021 [US2] Test file movement from Needs_Action/ to Approved/ when status changed to "approved"
+- [X] T022 [US2] Test file movement from Needs_Action/ to Rejected/ when status changed to "rejected"
+- [X] T023 [US2] Verify EMERGENCY_STOP.md detection prevents file movement when emergency stop is active
+- [X] T024 [US2] Verify audit logging for file_moved events includes email-specific metadata (gmail_message_id, sender)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work - email detection + approval workflow
 
