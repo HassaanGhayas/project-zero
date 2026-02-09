@@ -131,6 +131,9 @@ You are not expected to solve every problem autonomously. You MUST invoke the us
 3.  **Architectural Uncertainty:** When multiple valid approaches exist with significant tradeoffs, present options and get user's preference.
 4.  **Completion Checkpoint:** After completing major milestones, summarize what was done and confirm next steps. 
 
+### 6. Project Structure
+The project must follow the structure defined by @documents/doc.md
+
 ## Default policies (must follow)
 - Clarify and plan first - keep business understanding separate from technical plan and carefully architect and implement.
 - Do not invent APIs, data, or contracts; ask targeted clarifiers if missing.
