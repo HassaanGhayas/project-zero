@@ -139,11 +139,11 @@
 
 **Purpose**: Comprehensive testing of all user stories and edge cases
 
-- [ ] T043 [P] Create tests/test_gmail_watcher.py with mock Gmail API responses testing email detection, duplicate prevention, rate limit handling
-- [ ] T044 [P] Create tests/test_gmail_mcp_server.py testing archive_email and mark_as_read tools with mock Gmail API
-- [ ] T045 [P] Create tests/test_email_categorizer.py testing priority determination logic with various email scenarios
-- [ ] T046 [P] Create tests/integration/test_gmail_e2e.py testing complete workflow (detection → approval → execution)
-- [ ] T047 Run full test suite with uv run pytest tests/ -v and verify all Gmail tests pass
+- [X] T043 [P] Create tests/test_gmail_watcher.py with mock Gmail API responses testing email detection, duplicate prevention, rate limit handling
+- [X] T044 [P] Create tests/test_gmail_mcp_server.py testing archive_email and mark_as_read tools with mock Gmail API
+- [X] T045 [P] Create tests/test_email_categorizer.py testing priority determination logic with various email scenarios
+- [X] T046 [P] Create tests/integration/test_gmail_e2e.py testing complete workflow (detection → approval → execution)
+- [X] T047 Run full test suite with uv run pytest tests/ -v and verify all Gmail tests pass
 - [ ] T048 Manual E2E test: Send test email, verify action file creation, approve, verify execution, check Gmail for archived message
 - [ ] T049 Test exponential backoff behavior by simulating rate limit errors (verify check_interval doubles up to 3600s max)
 - [ ] T050 Test OAuth token expiration handling (verify watcher pauses and logs clear re-authentication instructions)

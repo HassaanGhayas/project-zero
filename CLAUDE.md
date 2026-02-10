@@ -131,9 +131,6 @@ You are not expected to solve every problem autonomously. You MUST invoke the us
 3.  **Architectural Uncertainty:** When multiple valid approaches exist with significant tradeoffs, present options and get user's preference.
 4.  **Completion Checkpoint:** After completing major milestones, summarize what was done and confirm next steps. 
 
-### 6. Project Structure
-The project must follow the structure defined by @documents/doc.md
-
 ## Default policies (must follow)
 - Clarify and plan first - keep business understanding separate from technical plan and carefully architect and implement.
 - Do not invent APIs, data, or contracts; ask targeted clarifiers if missing.
@@ -244,35 +241,7 @@ Additional rules define inside @AGENTS.md must be followed.
 - **NDJSON logging** for append-only audit trails
 - **uv** for Python package management
 
-## Available MCPs & Plugins (2026-02-09)
-
-### MCP Servers (6 connected)
-1. **claude.ai Canva** - Design and presentation creation
-2. **plugin:claude-mem:mcp-search** - Memory/observation search and storage
-3. **plugin:context7:context7** - Library documentation and code examples
-4. **plugin:playwright:playwright** - Browser automation and testing
-5. **plugin:serena:serena** - Semantic code analysis and editing
-6. **playwright** - Duplicate Playwright instance
-
-### Enabled Plugins (16)
-- **agent-sdk-dev** - Agent SDK development tools
-- **claude-code-setup** - Claude Code automation recommendations
-- **claude-md-management** - CLAUDE.md maintenance
-- **claude-mem** - Memory management and search
-- **code-review** - Pull request code review
-- **code-simplifier** - Code refactoring and simplification
-- **context7** - Library documentation fetching
-- **feature-dev** - Guided feature development
-- **frontend-design** - Production-grade frontend interfaces
-- **huggingface-skills** - Hugging Face ecosystem integration
-- **playwright** - Browser automation
-- **ralph-loop** - Ralph Loop workflow
-- **security-guidance** - Security best practices
-- **serena** - Semantic coding assistant
-- **superpowers** - Enhanced development workflows
-- **typescript-lsp** - TypeScript language server
-
-### Project-Level Skills (15 in `.claude/skills/`)
+## Project-Level Skills (15 in `.claude/skills/`)
 1. audit-search - Search audit logs
 2. browser-use - Browser automation
 3. context7-efficient - Token-efficient library docs
