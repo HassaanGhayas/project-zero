@@ -1,15 +1,17 @@
 """
 Master orchestrator for all AI Employee watchers.
 
-This script runs four watchers simultaneously:
+This script runs five watchers simultaneously:
 1. Filesystem Watcher - Monitors Inbox/ for new file drops
-2. Gmail Watcher - Monitors Gmail for unread important emails (Silver Tier)
-3. Status Field Watcher - Monitors Needs_Action/ for user approvals/rejections
-4. Approved Watcher - Monitors Approved/ for immediate execution
+2. Gmail Watcher - Monitors Gmail for unread important emails (Silver Tier Phase 1)
+3. WhatsApp Watcher - Monitors WhatsApp Web for priority messages (Silver Tier Phase 2)
+4. Status Field Watcher - Monitors Needs_Action/ for user approvals/rejections
+5. Approved Watcher - Monitors Approved/ for immediate execution
 
 Complete workflow:
   File drops in Inbox/ → Action file created in Needs_Action/ →
   Email arrives in Gmail → Action file created in Needs_Action/ →
+  WhatsApp message arrives → Action file created in Needs_Action/ →
   User edits status to 'approved' → File moves to Approved/ →
   Action executed immediately → Confirmation created in In_Progress/ →
   User reviews confirmation → Moves to Done/
@@ -31,15 +33,17 @@ from .filesystem_watcher import FileSystemWatcher
 from .gmail_watcher import GmailWatcher
 from .logger_config import setup_logging
 from .status_field_watcher import StatusFieldWatcher
+from .whatsapp_watcher import WhatsAppWatcher
 
 
 def main():
     """
-    Start all four watchers and run until interrupted.
+    Start all five watchers and run until interrupted.
 
     Watchers run in parallel:
     - Filesystem watcher (Inbox/ → Needs_Action/)
     - Gmail watcher (Gmail API → Needs_Action/) - Silver Tier Phase 1
+    - WhatsApp watcher (WhatsApp Web → Needs_Action/) - Silver Tier Phase 2
     - Status field watcher (Needs_Action/ → Approved/Rejected/)
     - Approved watcher (Approved/ → execute → In_Progress/)
     """
@@ -75,7 +79,7 @@ def main():
     fs_watcher = FileSystemWatcher(
         vault_path=vault_path,
         inbox_path=inbox_path,
-        logger=setup_logging("filesystem_watcher", vault_path)
+        logger=setup_logging("filesystem_watcher", vault_path),
     )
 
     # 2. Gmail Watcher (Gmail API → Needs_Action) - Silver Tier Phase 1
@@ -83,19 +87,29 @@ def main():
     gmail_watcher = GmailWatcher(
         vault_path=vault_path,
         check_interval=gmail_check_interval,
-        logger=setup_logging("gmail_watcher", vault_path)
+        logger=setup_logging("gmail_watcher", vault_path),
     )
 
-    # 3. Status Field Watcher (Needs_Action → Approved/Rejected)
+    # 3. WhatsApp Watcher (WhatsApp Web → Needs_Action) - Silver Tier Phase 2
+    whatsapp_session_path = Path(
+        os.getenv("WHATSAPP_SESSION_PATH", str(Path.home() / ".whatsapp" / "session"))
+    )
+    whatsapp_check_interval = int(os.getenv("WHATSAPP_CHECK_INTERVAL", "30"))
+    whatsapp_watcher = WhatsAppWatcher(
+        vault_path=vault_path,
+        session_path=whatsapp_session_path,
+        check_interval=whatsapp_check_interval,
+        logger=setup_logging("whatsapp_watcher", vault_path),
+    )
+
+    # 4. Status Field Watcher (Needs_Action → Approved/Rejected)
     status_watcher = StatusFieldWatcher(
-        vault_path=vault_path,
-        logger=setup_logging("status_field_watcher", vault_path)
+        vault_path=vault_path, logger=setup_logging("status_field_watcher", vault_path)
     )
 
-    # 3. Approved Watcher (Approved → execute → In_Progress)
+    # 5. Approved Watcher (Approved → execute → In_Progress)
     approved_watcher = ApprovedWatcher(
-        vault_path=vault_path,
-        logger=setup_logging("approved_watcher", vault_path)
+        vault_path=vault_path, logger=setup_logging("approved_watcher", vault_path)
     )
 
     # Setup graceful shutdown
@@ -106,6 +120,7 @@ def main():
 
         fs_watcher.stop()
         gmail_watcher.stop()
+        whatsapp_watcher.stop()
         status_watcher.stop()
         approved_watcher.stop()
 
@@ -127,8 +142,13 @@ def main():
         gmail_watcher.start()
         logger.info("✅ Gmail watcher started (Gmail API → Needs_Action/)")
 
+        whatsapp_watcher.start()
+        logger.info("✅ WhatsApp watcher started (WhatsApp Web → Needs_Action/)")
+
         status_watcher.start()
-        logger.info("✅ Status field watcher started (Needs_Action/ → Approved/Rejected/)")
+        logger.info(
+            "✅ Status field watcher started (Needs_Action/ → Approved/Rejected/)"
+        )
 
         approved_watcher.start()
         logger.info("✅ Approved watcher started (Approved/ → execute → In_Progress/)")
@@ -139,7 +159,9 @@ def main():
         logger.info("=" * 60)
         logger.info("")
         logger.info("Workflow:")
-        logger.info("  1. Drop file in Inbox/ OR Email arrives in Gmail → Action file created in Needs_Action/")
+        logger.info(
+            "  1. Drop file in Inbox/ OR Email/WhatsApp arrives → Action file created in Needs_Action/"
+        )
         logger.info("  2. Edit status: pending → approved → Moves to Approved/")
         logger.info("  3. Action executes immediately → Confirmation in In_Progress/")
         logger.info("  4. Review confirmation → Move to Done/")
