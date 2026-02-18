@@ -1,7 +1,12 @@
+"""
+LinkedIn OAuth2 token management utilities.
+
+Provides load/save/expiry-check/refresh operations for OAuth2 tokens
+used by the LinkedIn integration. Tokens are stored as JSON files on disk.
+"""
 import json
 import time
 from pathlib import Path
-from typing import Optional
 
 import requests
 
