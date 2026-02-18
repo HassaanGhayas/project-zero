@@ -2,7 +2,9 @@
 LinkedIn API v2 MCP server.
 
 Wraps LinkedIn ugcPosts and userinfo endpoints with OAuth2 token management.
-Tokens are auto-refreshed on 401 responses.
+Tokens are proactively refreshed based on expiry time (300-second buffer),
+not on 401 responses. A server-side revoked token will propagate a 401
+HTTPError to the caller.
 """
 import logging
 import os
