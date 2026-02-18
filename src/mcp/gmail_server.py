@@ -40,22 +40,30 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+
 class GmailMCPServer:
     """MCP Server for Gmail operations."""
 
     def __init__(self):
         """Initialize Gmail MCP server with OAuth credentials."""
         from dotenv import load_dotenv
+
         load_dotenv()
 
-        self.token_path = os.getenv('GMAIL_TOKEN_PATH', str(Path.home() / '.google' / 'token.json'))
-        self.credentials_path = os.getenv('GMAIL_CREDENTIALS_PATH', str(Path.home() / '.google' / 'credentials.json'))
+        self.token_path = os.getenv(
+            "GMAIL_TOKEN_PATH", str(Path.home() / ".google" / "token.json")
+        )
+        self.credentials_path = os.getenv(
+            "GMAIL_CREDENTIALS_PATH", str(Path.home() / ".google" / "credentials.json")
+        )
         self.service = None
         self.creds = None
 
         # Setup audit logging (T029)
-        self.vault_path = Path(os.getenv('VAULT_PATH', str(Path.cwd() / 'AI_Employee_Vault')))
-        self.logs_path = self.vault_path / 'Logs'
+        self.vault_path = Path(
+            os.getenv("VAULT_PATH", str(Path.cwd() / "AI_Employee_Vault"))
+        )
+        self.logs_path = self.vault_path / "Logs"
         self.logs_path.mkdir(parents=True, exist_ok=True)
 
     def _initialize_service(self) -> bool:
@@ -73,8 +81,7 @@ class GmailMCPServer:
 
             # Load credentials from token.json
             self.creds = Credentials.from_authorized_user_file(
-                str(token_path),
-                ['https://www.googleapis.com/auth/gmail.modify']
+                str(token_path), ["https://www.googleapis.com/auth/gmail.modify"]
             )
 
             # Refresh token if expired
@@ -84,7 +91,7 @@ class GmailMCPServer:
                 token_path.write_text(self.creds.to_json())
 
             # Build Gmail API service
-            self.service = build('gmail', 'v1', credentials=self.creds)
+            self.service = build("gmail", "v1", credentials=self.creds)
             return True
 
         except Exception as e:
@@ -96,11 +103,13 @@ class GmailMCPServer:
         error_log = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "error_code": error_code,
-            "message": message
+            "message": message,
         }
         print(json.dumps(error_log), file=sys.stderr)
 
-    def _log_audit_event(self, event_type: str, context: Dict[str, Any], status: str) -> None:
+    def _log_audit_event(
+        self, event_type: str, context: Dict[str, Any], status: str
+    ) -> None:
         """
         Log event to NDJSON audit trail (T029).
 
@@ -119,12 +128,12 @@ class GmailMCPServer:
             "event_type": event_type,
             "actor": "gmail_mcp_server",
             "status": status,
-            **context
+            **context,
         }
 
         # Append to NDJSON log file
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry) + '\n')
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
 
     def archive_email(self, message_id: str) -> Dict[str, Any]:
         """
@@ -143,46 +152,51 @@ class GmailMCPServer:
                     "status": "error",
                     "error_code": "AUTH_ERROR",
                     "error_message": "Failed to initialize Gmail service. Run scripts/setup_gmail_oauth.py to authenticate.",
-                    "message_id": message_id
+                    "message_id": message_id,
                 }
 
         try:
             # Check if message exists and get current labels
-            message = self.service.users().messages().get(
-                userId='me',
-                id=message_id,
-                format='minimal'
-            ).execute()
+            message = (
+                self.service.users()
+                .messages()
+                .get(userId="me", id=message_id, format="minimal")
+                .execute()
+            )
 
-            current_labels = message.get('labelIds', [])
+            current_labels = message.get("labelIds", [])
 
             # If already archived (no INBOX label), return success
-            if 'INBOX' not in current_labels:
+            if "INBOX" not in current_labels:
                 result = {
                     "status": "success",
                     "action": "already_archived",
                     "message_id": message_id,
-                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 }
-                self._log_audit_event("gmail_archive", {"message_id": message_id, "action": "already_archived"}, "success")
+                self._log_audit_event(
+                    "gmail_archive",
+                    {"message_id": message_id, "action": "already_archived"},
+                    "success",
+                )
                 return result
 
             # Remove INBOX label to archive
             self.service.users().messages().modify(
-                userId='me',
-                id=message_id,
-                body={
-                    'removeLabelIds': ['INBOX']
-                }
+                userId="me", id=message_id, body={"removeLabelIds": ["INBOX"]}
             ).execute()
 
             result = {
                 "status": "success",
                 "action": "archived",
                 "message_id": message_id,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
-            self._log_audit_event("gmail_archive", {"message_id": message_id, "action": "archived"}, "success")
+            self._log_audit_event(
+                "gmail_archive",
+                {"message_id": message_id, "action": "archived"},
+                "success",
+            )
             return result
 
         except HttpError as e:
@@ -197,16 +211,26 @@ class GmailMCPServer:
                 error_message = "Authentication failed. Token may be expired."
             elif e.resp.status == 429:
                 error_code = "RATE_LIMIT"
-                error_message = "Gmail API rate limit exceeded. Implement exponential backoff."
+                error_message = (
+                    "Gmail API rate limit exceeded. Implement exponential backoff."
+                )
 
             result = {
                 "status": "error",
                 "error_code": error_code,
                 "error_message": error_message,
-                "message_id": message_id
+                "message_id": message_id,
             }
             # Log error to audit trail
-            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error_code": error_code, "error_message": error_message}, "error")
+            self._log_audit_event(
+                "gmail_api_error",
+                {
+                    "message_id": message_id,
+                    "error_code": error_code,
+                    "error_message": error_message,
+                },
+                "error",
+            )
             return result
 
         except Exception as e:
@@ -214,10 +238,12 @@ class GmailMCPServer:
                 "status": "error",
                 "error_code": "NETWORK_ERROR",
                 "error_message": str(e),
-                "message_id": message_id
+                "message_id": message_id,
             }
             # Log error to audit trail
-            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error": str(e)}, "error")
+            self._log_audit_event(
+                "gmail_api_error", {"message_id": message_id, "error": str(e)}, "error"
+            )
             return result
 
     def mark_as_read(self, message_id: str) -> Dict[str, Any]:
@@ -237,46 +263,51 @@ class GmailMCPServer:
                     "status": "error",
                     "error_code": "AUTH_ERROR",
                     "error_message": "Failed to initialize Gmail service. Run scripts/setup_gmail_oauth.py to authenticate.",
-                    "message_id": message_id
+                    "message_id": message_id,
                 }
 
         try:
             # Check if message exists and get current labels
-            message = self.service.users().messages().get(
-                userId='me',
-                id=message_id,
-                format='minimal'
-            ).execute()
+            message = (
+                self.service.users()
+                .messages()
+                .get(userId="me", id=message_id, format="minimal")
+                .execute()
+            )
 
-            current_labels = message.get('labelIds', [])
+            current_labels = message.get("labelIds", [])
 
             # If already marked as read (no UNREAD label), return success
-            if 'UNREAD' not in current_labels:
+            if "UNREAD" not in current_labels:
                 result = {
                     "status": "success",
                     "action": "already_marked_as_read",
                     "message_id": message_id,
-                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 }
-                self._log_audit_event("gmail_mark_read", {"message_id": message_id, "action": "already_marked_as_read"}, "success")
+                self._log_audit_event(
+                    "gmail_mark_read",
+                    {"message_id": message_id, "action": "already_marked_as_read"},
+                    "success",
+                )
                 return result
 
             # Remove UNREAD label to mark as read
             self.service.users().messages().modify(
-                userId='me',
-                id=message_id,
-                body={
-                    'removeLabelIds': ['UNREAD']
-                }
+                userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}
             ).execute()
 
             result = {
                 "status": "success",
                 "action": "marked_as_read",
                 "message_id": message_id,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
-            self._log_audit_event("gmail_mark_read", {"message_id": message_id, "action": "marked_as_read"}, "success")
+            self._log_audit_event(
+                "gmail_mark_read",
+                {"message_id": message_id, "action": "marked_as_read"},
+                "success",
+            )
             return result
 
         except HttpError as e:
@@ -291,16 +322,26 @@ class GmailMCPServer:
                 error_message = "Authentication failed. Token may be expired."
             elif e.resp.status == 429:
                 error_code = "RATE_LIMIT"
-                error_message = "Gmail API rate limit exceeded. Implement exponential backoff."
+                error_message = (
+                    "Gmail API rate limit exceeded. Implement exponential backoff."
+                )
 
             result = {
                 "status": "error",
                 "error_code": error_code,
                 "error_message": error_message,
-                "message_id": message_id
+                "message_id": message_id,
             }
             # Log error to audit trail
-            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error_code": error_code, "error_message": error_message}, "error")
+            self._log_audit_event(
+                "gmail_api_error",
+                {
+                    "message_id": message_id,
+                    "error_code": error_code,
+                    "error_message": error_message,
+                },
+                "error",
+            )
             return result
 
         except Exception as e:
@@ -308,10 +349,12 @@ class GmailMCPServer:
                 "status": "error",
                 "error_code": "NETWORK_ERROR",
                 "error_message": str(e),
-                "message_id": message_id
+                "message_id": message_id,
             }
             # Log error to audit trail
-            self._log_audit_event("gmail_api_error", {"message_id": message_id, "error": str(e)}, "error")
+            self._log_audit_event(
+                "gmail_api_error", {"message_id": message_id, "error": str(e)}, "error"
+            )
             return result
 
     def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
@@ -324,19 +367,20 @@ class GmailMCPServer:
         Returns:
             Tool execution result
         """
-        tool_name = request.get('tool')
-        args = request.get('arguments', {})
+        tool_name = request.get("tool")
+        args = request.get("arguments", {})
 
-        if tool_name == 'archive_email':
-            return self.archive_email(args.get('message_id', ''))
-        elif tool_name == 'mark_as_read':
-            return self.mark_as_read(args.get('message_id', ''))
+        if tool_name == "archive_email":
+            return self.archive_email(args.get("message_id", ""))
+        elif tool_name == "mark_as_read":
+            return self.mark_as_read(args.get("message_id", ""))
         else:
             return {
                 "status": "error",
                 "error_code": "UNKNOWN_TOOL",
-                "error_message": f"Unknown tool: {tool_name}"
+                "error_message": f"Unknown tool: {tool_name}",
             }
+
 
 def main():
     """Main MCP server loop."""
@@ -353,7 +397,7 @@ def main():
             error_response = {
                 "status": "error",
                 "error_code": "INVALID_JSON",
-                "error_message": f"Failed to parse JSON request: {str(e)}"
+                "error_message": f"Failed to parse JSON request: {str(e)}",
             }
             print(json.dumps(error_response))
             sys.stdout.flush()
@@ -361,10 +405,11 @@ def main():
             error_response = {
                 "status": "error",
                 "error_code": "INTERNAL_ERROR",
-                "error_message": str(e)
+                "error_message": str(e),
             }
             print(json.dumps(error_response))
             sys.stdout.flush()
+
 
 if __name__ == "__main__":
     main()

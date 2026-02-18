@@ -1,115 +1,122 @@
-# WhatsApp Integration Setup Guide
+# WhatsApp Business API Setup Guide
 
-Complete guide for setting up WhatsApp Web monitoring for the AI Employee system (Silver Tier Phase 2).
+Complete guide for setting up WhatsApp message monitoring via the Meta Cloud API
+for the AI Employee system (Silver Tier Phase 2).
 
 ---
 
 ## Overview
 
-The WhatsApp watcher monitors WhatsApp Web for unread messages containing priority keywords, generating action files for human approval via the existing approval workflow.
+The WhatsApp integration uses the **Meta WhatsApp Business Cloud API** — no browser
+automation required. Incoming messages are delivered to a local webhook server,
+stored in a JSON queue, and picked up by the WhatsApp watcher every 30 seconds.
 
-**Key Features:**
-- Browser automation via Playwright (WhatsApp Web)
-- Keyword-based message filtering
-- Session persistence (no repeated QR code scans)
-- Human-in-the-loop approval workflow
-- Constitution-compliant audit logging
+```
+Meta Cloud API
+    │  POST /webhook (new messages)
+    ▼
+src/api/whatsapp_webhook.py  ──writes──▶  ~/.whatsapp/message_queue.json
+                                                  │
+                                          WhatsAppWatcher (polls every 30s)
+                                                  │
+                                          AI_Employee_Vault/Needs_Action/*.md
+```
+
+**Key advantages over browser automation:**
+- No QR code scanning or browser sessions
+- Reliable delivery via Meta's infrastructure
+- Supports sending replies via API
+- Works headlessly in production
 
 ---
 
 ## Prerequisites
 
-### 1. Install Playwright
+### 1. Meta Developer Account
 
-Playwright is required for browser automation:
+1. Go to **https://developers.facebook.com**
+2. Click **My Apps → Create App → Business**
+3. Fill in app name and contact email → **Create App**
+4. Under "Add a Product", click **Set Up** next to **WhatsApp**
+
+### 2. Collect Your Credentials
+
+From the **WhatsApp → Getting Started** page:
+
+| Credential | Where to find it |
+|---|---|
+| `WHATSAPP_PHONE_NUMBER_ID` | "Phone Number ID" field on Getting Started page |
+| `WHATSAPP_ACCESS_TOKEN` | "Temporary access token" (24h) or permanent system user token |
+| `WHATSAPP_VERIFY_TOKEN` | Any secret string **you choose** — used to verify webhook ownership |
+
+**For a permanent access token (production):**
+1. Business Settings → System Users → Add
+2. Assign WhatsApp app with Full Control
+3. Generate Token → select app → copy
+
+### 3. Add a Test Recipient
+
+On the Getting Started page, under "To":
+1. Click **Manage phone number list**
+2. Add your personal WhatsApp number
+3. Verify with the code sent to your phone
+
+---
+
+## Environment Variables
+
+Add to your `.env` file:
 
 ```bash
-# Install Playwright Python package
-uv add playwright
-
-# Install Chromium browser
-uv run playwright install chromium
-
-# Verify installation
-uv run playwright --version
-```
-
-### 2. Configure Environment Variables
-
-Add the following to your `.env` file:
-
-```bash
-# WhatsApp Integration (Silver Tier Phase 2)
-WHATSAPP_SESSION_PATH=/home/hasss/.whatsapp/session
+# WhatsApp Business API (Silver Tier Phase 2)
+WHATSAPP_ACCESS_TOKEN=EAABwzLixnjYBO...       # from Meta Developer Console
+WHATSAPP_PHONE_NUMBER_ID=123456789012345       # from Meta Developer Console
+WHATSAPP_VERIFY_TOKEN=my-secret-verify-token   # any string you choose
+WHATSAPP_WEBHOOK_PORT=8081
 WHATSAPP_CHECK_INTERVAL=30
-PLAYWRIGHT_HEADLESS=true
-```
-
-**Configuration Details:**
-- `WHATSAPP_SESSION_PATH`: Browser session storage directory (persists login)
-- `WHATSAPP_CHECK_INTERVAL`: Polling interval in seconds (default: 30)
-- `PLAYWRIGHT_HEADLESS`: Run browser in background (true) or visible (false for debugging)
-
-### 3. Verify .gitignore
-
-Ensure WhatsApp session is excluded from version control:
-
-```bash
-# Check .gitignore includes:
-.whatsapp/
-config/whatsapp_session/
+WHATSAPP_QUEUE_FILE=/home/hasss/.whatsapp/message_queue.json
 ```
 
 ---
 
-## Initial Setup (QR Code Authentication)
+## Startup Sequence
 
-### Step 1: Run Watcher in Visible Mode
+Three processes must run together:
 
-For first-time setup, run browser in visible mode to scan QR code:
-
-```bash
-# Temporarily set headless=false in .env
-PLAYWRIGHT_HEADLESS=false
-
-# Start all watchers
-uv run python -m src.watchers.run_all_watchers
-```
-
-### Step 2: Scan QR Code
-
-When WhatsApp Web loads:
-1. Open WhatsApp on your phone
-2. Tap **Menu** (⋮) > **Linked Devices**
-3. Tap **Link a Device**
-4. Scan the QR code displayed in the browser
-
-### Step 3: Verify Authentication
-
-After successful QR scan:
-- Browser shows your WhatsApp chats
-- Session is saved to `WHATSAPP_SESSION_PATH`
-- Watcher begins monitoring for priority messages
-
-### Step 4: Switch to Headless Mode
-
-After successful authentication, enable headless mode:
+### 1. Start the Webhook Server
 
 ```bash
-# Update .env
-PLAYWRIGHT_HEADLESS=true
-
-# Restart watchers
-uv run python -m src.watchers.run_all_watchers
+uv run python -m src.api.whatsapp_webhook
+# Output: 🚀 Starting WhatsApp webhook server on 0.0.0.0:8081
 ```
 
-Session persists across restarts - no need to scan QR again!
+### 2. Expose via ngrok (for local development)
+
+```bash
+ngrok http 8081
+# Copy the https URL: https://abc123.ngrok-free.app
+```
+
+> **Production**: Deploy the webhook server to a VPS or cloud function with a static HTTPS URL.
+
+### 3. Register the Webhook in Meta Developer Console
+
+1. Go to **WhatsApp → Configuration → Webhook**
+2. Click **Edit**
+3. Set **Callback URL**: `https://abc123.ngrok-free.app/webhook`
+4. Set **Verify Token**: same value as `WHATSAPP_VERIFY_TOKEN` in your `.env`
+5. Click **Verify and Save** (webhook server must be running!)
+6. Click **Manage** → subscribe to **messages**
+
+### 4. Start All Watchers
+
+```bash
+uv run python -m src.watchers.run_all_watchers
+```
 
 ---
 
 ## Keyword Configuration
-
-### Default Keywords
 
 Priority keywords are defined in `config/whatsapp_keywords.yaml`:
 
@@ -127,43 +134,38 @@ keywords:
   - immediately
 ```
 
-### Customizing Keywords
-
-Edit `config/whatsapp_keywords.yaml` to add/remove keywords:
-
-```yaml
-keywords:
-  - urgent
-  - payment
-  - your-custom-keyword
-```
-
-**Important:** Restart watchers after modifying keywords.
+Only messages containing at least one keyword create action files.
+Edit and restart watchers to apply changes.
 
 ---
 
 ## Workflow
 
-### 1. Message Detection
+### 1. Message Received
 
-When an unread WhatsApp message contains a priority keyword:
-1. WhatsApp watcher detects the message
-2. Action file created in `AI_Employee_Vault/Needs_Action/`
-3. Audit log entry created: `whatsapp_message_detected`
+When someone sends a WhatsApp message to your registered number:
+1. Meta POSTs the message to `https://your-url/webhook`
+2. Webhook server stores it in `~/.whatsapp/message_queue.json` with `processed: false`
+3. Audit log entry written: `whatsapp_message_received`
 
-**Detection Latency:** Maximum 30 seconds (default check interval)
+### 2. Watcher Picks Up (every 30s)
 
-### 2. Human Approval
+1. Reads all `processed: false` entries from queue
+2. Marks them `processed: true`
+3. Filters by priority keywords
+4. Creates action files in `AI_Employee_Vault/Needs_Action/`
 
-Review action file in `Needs_Action/`:
+### 3. Human Approval
+
+Review the action file in `Needs_Action/`:
 
 ```markdown
 ---
 type: message
-whatsapp_message_id: contact_12345678
+whatsapp_message_id: wamid.HBgLMTY1...
 sender: Client A
-received_timestamp: 2026-02-14T20:30:00Z
-status: pending  # ← Edit this to approve
+received_timestamp: 2026-02-18T10:00:00
+status: pending        # ← change to approved or rejected
 priority: high
 has_attachments: false
 category: whatsapp_message
@@ -172,31 +174,48 @@ category: whatsapp_message
 ## Message Details
 
 **From:** Client A
-**Received:** 2026-02-14T20:30:00Z
+**Received:** 2026-02-18T10:00:00
 
 **Message:**
 Urgent: Need help with payment invoice ASAP
-
-## Suggested Actions
-
-- [ ] Read full message in WhatsApp
-- [ ] Reply to sender via WhatsApp MCP
-- [ ] Forward to relevant party
-- [ ] Mark as handled
 ```
 
-**To Approve:** Change `status: pending` to `status: approved`
+Change `status: pending` → `status: approved` to approve.
 
-**To Reject:** Change `status: pending` to `status: rejected`
+### 4. Sending Replies
 
-### 3. Execution (Future Enhancement)
+Use the WhatsApp MCP server:
 
-After approval:
-- File moves to `Approved/` (via StatusFieldWatcher)
-- WhatsApp MCP sends response (future implementation)
-- Confirmation file created in `In_Progress/`
+```python
+from src.mcp.whatsapp_server import WhatsAppMCPServer
 
-**Note:** WhatsApp message sending requires full Playwright MCP integration (Phase 2.2).
+server = WhatsAppMCPServer()
+result = server.send_message(to="15551234567", text="We received your message!")
+# {"status": "sent", "to": "15551234567", "message_id": "wamid.HBg..."}
+```
+
+Or send an approved template:
+
+```python
+result = server.send_template(
+    to="15551234567",
+    template_name="hello_world",
+    language="en_US",
+)
+```
+
+---
+
+## Verifying Credentials
+
+```bash
+uv run python -c "
+from src.mcp.whatsapp_server import WhatsAppMCPServer
+s = WhatsAppMCPServer()
+print(s.verify_credentials())
+"
+# {"valid": true, "phone_number_id": "...", "display_phone_number": "+1 555 ..."}
+```
 
 ---
 
@@ -205,291 +224,121 @@ After approval:
 ### Check Watcher Status
 
 ```bash
-# View orchestrator logs
-tail -f AI_Employee_Vault/Logs/$(date +%Y-%m-%d).json | grep whatsapp
-
-# Check for WhatsApp events
-cat AI_Employee_Vault/Logs/$(date +%Y-%m-%d).json | jq 'select(.action_type | contains("whatsapp"))'
+# View recent WhatsApp events in audit log
+cat AI_Employee_Vault/Logs/$(date +%Y-%m-%d).json | python3 -c "
+import sys, json
+for line in sys.stdin:
+    e = json.loads(line)
+    if 'whatsapp' in e.get('action_type',''):
+        print(e)
+"
 ```
 
-### Verify Session Status
+### Inspect the Message Queue
 
-Session files stored in `$WHATSAPP_SESSION_PATH`:
 ```bash
-ls -la ~/.whatsapp/session/
+cat ~/.whatsapp/message_queue.json | python3 -m json.tool
+```
 
-# Should contain:
-# - cookies.json (authentication)
-# - localStorage.json (session data)
-# - User Data/ directory (Chromium profile)
+### Test the Webhook Locally
+
+```bash
+# Simulate an incoming message (no Meta credentials needed)
+curl -X POST http://localhost:8081/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object": "whatsapp_business_account",
+    "entry": [{
+      "changes": [{
+        "value": {
+          "messages": [{
+            "id": "test_001",
+            "from": "15551234567",
+            "timestamp": "1739880000",
+            "type": "text",
+            "text": {"body": "Urgent: payment needed ASAP"}
+          }],
+          "contacts": [{"wa_id": "15551234567", "profile": {"name": "Test User"}}]
+        }
+      }]
+    }]
+  }'
+# Response: {"status":"ok","messages_stored":1}
 ```
 
 ### Common Issues
 
-#### Issue: QR Code Expires Before Scanning
-**Symptom:** QR code disappears or shows "Reload" message
-**Solution:**
-- Refresh WhatsApp Web page
-- Generate new QR code
-- Scan within 20 seconds
+#### Webhook Verification Fails
+- Ensure webhook server is running before clicking "Verify and Save"
+- Confirm `WHATSAPP_VERIFY_TOKEN` in `.env` matches the token in Meta Console
+- Test manually: `curl "http://localhost:8081/webhook?hub.mode=subscribe&hub.verify_token=YOUR_TOKEN&hub.challenge=testchallenge"`
 
-#### Issue: Session Expired / Re-Authentication Required
-**Symptom:** Watcher logs "auth_required" errors
-**Solution:**
-```bash
-# Delete session data
-rm -rf ~/.whatsapp/session/*
+#### Messages Not Appearing in Queue
+- Check webhook server logs for incoming POST requests
+- Verify webhook is subscribed to "messages" in Meta Console (Manage → messages)
+- Confirm your number is in the test recipient list
 
-# Run watcher in visible mode
-PLAYWRIGHT_HEADLESS=false uv run python -m src.watchers.run_all_watchers
+#### No Action Files Created
+- Check keywords: `cat config/whatsapp_keywords.yaml`
+- Check queue file: `cat ~/.whatsapp/message_queue.json`
+- Run watcher in debug mode: `LOG_LEVEL=DEBUG uv run python -m src.watchers.run_all_watchers`
 
-# Scan new QR code
-```
-
-#### Issue: No Messages Detected
-**Symptom:** Messages arrive but no action files created
-**Checklist:**
-- ✅ Watcher is running (check logs)
-- ✅ Session is authenticated (no auth errors)
-- ✅ Message contains a priority keyword
-- ✅ Message is unread (WhatsApp Web shows unread badge)
-- ✅ Keywords config is valid YAML
-
-**Debug:**
-```bash
-# Check keyword config
-cat config/whatsapp_keywords.yaml
-
-# Enable debug logging
-export LOG_LEVEL=DEBUG
-uv run python -m src.watchers.run_all_watchers
-```
-
-#### Issue: Browser Crashes / Connection Timeout
-**Symptom:** Playwright errors in logs
-**Solution:**
-- Verify internet connection
-- Restart watcher
-- Check browser process isn't hanging: `ps aux | grep chromium`
-- Kill stale browser: `pkill -9 chromium`
+#### Access Token Expired (24h token)
+- Replace `WHATSAPP_ACCESS_TOKEN` in `.env` with a fresh token from Meta Console
+- Or generate a permanent system user token (recommended for production)
 
 ---
 
-## Session Management
+## Security
 
-### Session Lifetime
+### What's Stored Locally
+- Message queue: `~/.whatsapp/message_queue.json` (outside repo)
+- Audit logs: `AI_Employee_Vault/Logs/` (message metadata only, no content)
 
-WhatsApp Web sessions typically last **2-4 weeks** before re-authentication required.
-
-**Session Expiry Indicators:**
-- "Your phone not connected" message in WhatsApp Web
-- Watcher logs `auth_required` errors
-- No messages detected for extended period
-
-### Manual Session Reset
-
-To reset session (e.g., changing WhatsApp account):
-
-```bash
-# Stop all watchers
-pkill -f run_all_watchers
-
-# Delete session data
-rm -rf ~/.whatsapp/session/*
-
-# Restart with visible browser
-PLAYWRIGHT_HEADLESS=false uv run python -m src.watchers.run_all_watchers
-
-# Scan QR code for new account
-```
-
-### Multiple WhatsApp Accounts (Advanced)
-
-To monitor multiple WhatsApp accounts:
-
-```bash
-# Account 1 (primary)
-WHATSAPP_SESSION_PATH=~/.whatsapp/account1
-
-# Account 2 (secondary)
-WHATSAPP_SESSION_PATH=~/.whatsapp/account2
-```
-
-**Note:** Requires running separate watcher instances with different session paths.
-
----
-
-## Security and Privacy
-
-### Data Protection
-
-**What's Stored:**
-- Browser cookies (authentication tokens)
-- Local storage data (session info)
-- User profile data (Chromium)
-
-**What's NOT Stored:**
-- Message content (except in action files)
-- Contact lists
-- Media files
-- Encryption keys
+### What's Never Logged
+- Access tokens
+- Full message content (only metadata in audit trail)
 
 ### Constitution Compliance
-
-**Section V: Zero-Trust Secret Handling**
-- Session data stored outside repository (`~/.whatsapp/`)
-- `.gitignore` prevents accidental commits
-- No credentials in logs or code
-
-**Section VII: Comprehensive Audit Logging**
-- All detections logged to NDJSON
-- Message metadata (sender, timestamp, ID)
-- No message content in audit logs (privacy)
-
-**Section XIII: Emergency Stop**
-- Create `AI_Employee_Vault/EMERGENCY_STOP.md`
-- Watcher stops polling immediately
-- No messages processed until file removed
-
----
-
-## Performance Tuning
-
-### Polling Interval
-
-Default: 30 seconds (2 checks per minute)
-
-**Adjusting Interval:**
-```bash
-# More responsive (15 seconds)
-WHATSAPP_CHECK_INTERVAL=15
-
-# Less frequent (60 seconds)
-WHATSAPP_CHECK_INTERVAL=60
-```
-
-**Guidelines:**
-- **15-30s:** Real-time monitoring (recommended)
-- **60s:** Low-priority monitoring
-- **120s+:** Batch processing only
-
-**WhatsApp Web Limits:**
-- No official rate limits
-- 30s is safe and responsive
-- Avoid sub-10s intervals (excessive polling)
-
-### Resource Usage
-
-**Browser Memory:**
-- Chromium: ~200-400 MB RAM
-- Headless mode: ~150 MB (lower)
-- Visible mode: ~300 MB (higher)
-
-**CPU Usage:**
-- Idle: <1% CPU
-- During polling: 5-10% CPU spike
-- Session load: 15-20% CPU briefly
+- **Section V**: Credentials in `.env`, never committed
+- **Section VII**: NDJSON audit trail for every received and sent message
+- **Section XII**: Human approval required before any action
+- **Section XIII**: Emergency stop — create `AI_Employee_Vault/EMERGENCY_STOP.md`
 
 ---
 
 ## Testing
 
-### Manual End-to-End Test
-
-Follow the procedure in `tests/manual/T0XX_WHATSAPP_E2E_TEST_PROCEDURE.md`:
-
-1. **Authentication Test:** QR scan, session save, restart verification
-2. **Detection Test:** Send message with keyword, verify action file
-3. **Approval Test:** Edit status, verify file moved
-4. **Emergency Stop Test:** Create EMERGENCY_STOP.md, verify polling stops
-
 ### Automated Unit Tests
 
 ```bash
-# Run WhatsApp watcher tests
 uv run pytest tests/test_whatsapp_watcher.py -v
-
-# Expected: 11/11 tests PASSED
+# Expected: 20/20 PASSED
 ```
+
+### End-to-End Test (with real credentials)
+
+1. Start webhook server and ngrok
+2. Register webhook in Meta Console
+3. Send a WhatsApp message containing "urgent" to your test number
+4. Within 30s: verify action file in `AI_Employee_Vault/Needs_Action/`
+5. Change `status: pending` → `status: approved`
+6. Verify file moves to `AI_Employee_Vault/Approved/`
 
 ---
 
-## Next Steps
+## Architecture Reference
 
-After successful setup:
-
-1. **Monitor Dashboard:** Check `AI_Employee_Vault/Dashboard.md` for WhatsApp status
-2. **Test Message:** Send test message with "urgent" keyword
-3. **Verify Detection:** Action file appears in `Needs_Action/` within 30 seconds
-4. **Test Approval:** Edit status to `approved`, verify file moves
-5. **Production Use:** Enable headless mode, monitor audit logs
-
----
-
-## Advanced Configuration (Future)
-
-### Contact-Specific Rules
-
-Future enhancement will support contact-based priority:
-
-```yaml
-# config/whatsapp_keywords.yaml
-contacts:
-  - name: "Boss"
-    keywords: []  # All messages = high priority
-    auto_notify: true
-  - name: "Client A"
-    keywords: ["payment", "invoice"]
-    priority: high
-```
-
-### Auto-Response Templates
-
-Future enhancement will enable template-based responses:
-
-```yaml
-# config/whatsapp_responses.yaml
-templates:
-  - keyword: "invoice"
-    response: "Received your invoice. Will process within 24 hours."
-    auto_send: false  # Require human approval
-```
+| Component | File | Purpose |
+|---|---|---|
+| Webhook server | `src/api/whatsapp_webhook.py` | Receives messages from Meta, stores to queue |
+| Watcher | `src/watchers/whatsapp_watcher.py` | Polls queue, creates action files |
+| MCP server | `src/mcp/whatsapp_server.py` | Sends messages via Graph API |
+| Keywords | `config/whatsapp_keywords.yaml` | Priority filter |
+| Queue | `~/.whatsapp/message_queue.json` | Local message buffer |
 
 ---
 
-## Support and Troubleshooting
-
-### Logs Location
-
-**Audit Logs:** `AI_Employee_Vault/Logs/YYYY-MM-DD.json`
-**Watcher Logs:** Stdout (when running watcher)
-
-### Diagnostic Commands
-
-```bash
-# Check watcher is running
-ps aux | grep whatsapp_watcher
-
-# View recent WhatsApp events
-tail -20 AI_Employee_Vault/Logs/$(date +%Y-%m-%d).json | jq 'select(.actor=="whatsapp_watcher")'
-
-# Count messages detected today
-cat AI_Employee_Vault/Logs/$(date +%Y-%m-%d).json | jq -s '[.[] | select(.action_type=="whatsapp_message_detected")] | length'
-
-# Check session validity
-ls -lh ~/.whatsapp/session/cookies.json
-```
-
-### Getting Help
-
-For issues not covered in this guide:
-1. Check constitution compliance: `.specify/memory/constitution.md`
-2. Review implementation plan: `~/.claude/plans/proud-splashing-snail.md`
-3. Examine test cases: `tests/test_whatsapp_watcher.py`
-4. Review Phase 1 (Gmail) setup for similar patterns: `docs/GMAIL_SETUP.md`
-
----
-
-**Last Updated:** 2026-02-14
-**Phase:** Silver Tier Phase 2 - WhatsApp Integration
-**Status:** Ready for Production Testing
+**Last Updated:** 2026-02-18
+**Phase:** Silver Tier Phase 2 — WhatsApp Business API
+**Status:** Ready for Production

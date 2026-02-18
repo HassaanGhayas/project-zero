@@ -1,182 +1,332 @@
 """
-WhatsApp MCP Server - Send messages via WhatsApp Web
+WhatsApp Business MCP Server - Send messages via Meta Cloud API
 
-Provides MCP tools for WhatsApp automation using Playwright browser automation.
-Maintains persistent browser session for seamless message sending.
+Provides MCP tools for sending WhatsApp messages using the Meta Graph API
+(WhatsApp Business Cloud API). No browser automation required.
+
+Required environment variables:
+  WHATSAPP_ACCESS_TOKEN    - Permanent system user token from Meta Business Manager
+  WHATSAPP_PHONE_NUMBER_ID - Phone Number ID from Meta Developer Console
+
+API reference: https://developers.facebook.com/docs/whatsapp/cloud-api/messages
 
 Constitution Compliance:
-- Section V: Session credentials stored securely, never logged
-- Section VII: All actions logged to audit trail
-- Section VIII: Graceful error handling with clear error messages
+- Section V:  Credentials loaded from .env, never logged or committed
+- Section VII: All actions logged to NDJSON audit trail
+- Section VIII: Graceful error handling with typed error categories
 """
 
+import json
+import logging
+import os
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Meta Graph API base URL (v20.0 is the current stable version as of 2025)
+_GRAPH_API_BASE = "https://graph.facebook.com/v20.0"
 
 
 class WhatsAppMCPServer:
     """
-    MCP server for WhatsApp Web actions via Playwright.
+    MCP server for sending WhatsApp messages via the Meta Cloud API.
 
     Capabilities:
-    - send_message(to, text): Send WhatsApp message to contact
-    - verify_session(): Check if browser session is valid
+    - send_message(to, text): Send a text message to a WhatsApp number
+    - send_template(to, template_name, language): Send an approved template message
+    - verify_credentials(): Verify API credentials are valid
     """
 
-    def __init__(self, session_path: str):
+    def __init__(
+        self,
+        access_token: Optional[str] = None,
+        phone_number_id: Optional[str] = None,
+    ):
         """
         Initialize WhatsApp MCP server.
 
         Args:
-            session_path: Path to browser session storage directory
+            access_token: Meta Graph API bearer token. Falls back to
+                          WHATSAPP_ACCESS_TOKEN env var.
+            phone_number_id: WhatsApp Phone Number ID from Meta Developer Console.
+                             Falls back to WHATSAPP_PHONE_NUMBER_ID env var.
         """
-        self.session_path = Path(session_path)
-        self.session_path.mkdir(parents=True, exist_ok=True)
+        self.access_token = access_token or os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+        self.phone_number_id = phone_number_id or os.getenv(
+            "WHATSAPP_PHONE_NUMBER_ID", ""
+        )
+
+        if not self.access_token:
+            logger.warning(
+                "WHATSAPP_ACCESS_TOKEN not set — send_message will fail. "
+                "Set it in .env or pass as constructor argument."
+            )
+        if not self.phone_number_id:
+            logger.warning(
+                "WHATSAPP_PHONE_NUMBER_ID not set — send_message will fail. "
+                "Set it in .env or pass as constructor argument."
+            )
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     def send_message(self, to: str, text: str) -> Dict:
         """
-        Send WhatsApp message to contact.
+        Send a plain-text WhatsApp message.
 
         Args:
-            to: Contact name or phone number
-            text: Message text to send
+            to: Recipient phone number in E.164 format (e.g. "15551234567")
+            text: Message body (max 4096 characters)
 
         Returns:
-            Dictionary with status, to, text, and optional error
             {
                 "status": "sent" | "error",
-                "to": contact_name,
+                "to": phone_number,
                 "text": message_text,
-                "error": error_reason (if status=error)
+                "message_id": wamid (if sent),
+                "error": reason (if error)
             }
         """
-        # TODO: Implement Playwright browser automation
-        # This is a placeholder implementation structure
+        if not self._credentials_present():
+            return self._missing_credentials_error(to, text)
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "text",
+            "text": {
+                "preview_url": False,
+                "body": text,
+            },
+        }
 
         try:
-            # In production, this would:
-            # 1. Launch persistent browser context (self.session_path)
-            # 2. Navigate to https://web.whatsapp.com
-            # 3. Wait for page load (session should already be authenticated)
-            # 4. Search for contact: [data-testid="chat-list-search"]
-            # 5. Fill search box with contact name
-            # 6. Press Enter to open conversation
-            # 7. Type message: [data-testid="conversation-compose-box-input"]
-            # 8. Click send button: [data-testid="send"]
-            # 9. Wait for message sent confirmation
-            # 10. Return success result
+            response = requests.post(
+                f"{_GRAPH_API_BASE}/{self.phone_number_id}/messages",
+                headers=self._auth_headers(),
+                json=payload,
+                timeout=30,
+            )
 
-            # Placeholder return (successful send)
-            return {
-                "status": "sent",
-                "to": to,
-                "text": text,
-            }
+            if response.status_code == 200:
+                data = response.json()
+                message_id = data.get("messages", [{}])[0].get("id", "")
+                logger.info(f"✅ Message sent to {to} (wamid={message_id})")
+                return {
+                    "status": "sent",
+                    "to": to,
+                    "text": text,
+                    "message_id": message_id,
+                }
 
-        except Exception as e:
-            # Error handling
-            error_reason = self._categorize_error(e)
-
+            error_detail = self._parse_api_error(response)
+            logger.error(f"API error sending to {to}: {error_detail}")
             return {
                 "status": "error",
                 "to": to,
                 "text": text,
-                "error": error_reason,
-                "details": str(e),
+                "error": error_detail,
             }
 
-    def verify_session(self) -> Dict:
-        """
-        Verify WhatsApp Web session is valid.
+        except requests.Timeout:
+            return {"status": "error", "to": to, "text": text, "error": "network_timeout"}
+        except requests.ConnectionError:
+            return {"status": "error", "to": to, "text": text, "error": "network_error"}
+        except Exception as e:
+            logger.error(f"Unexpected error sending message: {e}", exc_info=True)
+            return {"status": "error", "to": to, "text": text, "error": str(e)}
 
-        Returns:
-            Dictionary with session status
-            {
-                "valid": True | False,
-                "authenticated": True | False,
-                "error": error_message (if invalid)
-            }
+    def send_template(
+        self,
+        to: str,
+        template_name: str,
+        language: str = "en_US",
+        components: Optional[list] = None,
+    ) -> Dict:
         """
-        # TODO: Implement session verification
-        # This would:
-        # 1. Launch browser with session_path
-        # 2. Navigate to web.whatsapp.com
-        # 3. Check if QR code is present (not authenticated)
-        # 4. Check if chat list is visible (authenticated)
-        # 5. Return session status
+        Send an approved WhatsApp template message.
 
-        # Placeholder return
-        return {
-            "valid": True,
-            "authenticated": True,
-        }
-
-    def _categorize_error(self, error: Exception) -> str:
-        """
-        Categorize error into user-friendly reason.
+        Templates must be pre-approved in Meta Business Manager before use.
 
         Args:
-            error: Exception that occurred
+            to: Recipient phone number in E.164 format
+            template_name: Name of the approved template
+            language: Language/locale code (default: "en_US")
+            components: Optional list of template component substitutions
 
         Returns:
-            Error category string
+            Same structure as send_message()
         """
-        error_str = str(error).lower()
+        if not self._credentials_present():
+            return self._missing_credentials_error(to, template_name)
 
-        if "timeout" in error_str:
-            return "network_timeout"
-        elif "not found" in error_str or "selector" in error_str:
-            return "contact_not_found"
-        elif "session" in error_str or "auth" in error_str:
-            return "auth_required"
-        elif "network" in error_str or "connection" in error_str:
-            return "network_error"
-        else:
-            return "unknown_error"
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": language},
+            },
+        }
+        if components:
+            payload["template"]["components"] = components  # type: ignore[index]
+
+        try:
+            response = requests.post(
+                f"{_GRAPH_API_BASE}/{self.phone_number_id}/messages",
+                headers=self._auth_headers(),
+                json=payload,
+                timeout=30,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                message_id = data.get("messages", [{}])[0].get("id", "")
+                return {
+                    "status": "sent",
+                    "to": to,
+                    "template": template_name,
+                    "message_id": message_id,
+                }
+
+            return {
+                "status": "error",
+                "to": to,
+                "template": template_name,
+                "error": self._parse_api_error(response),
+            }
+
+        except Exception as e:
+            return {"status": "error", "to": to, "template": template_name, "error": str(e)}
+
+    def verify_credentials(self) -> Dict:
+        """
+        Verify API credentials by calling the phone number details endpoint.
+
+        Returns:
+            {
+                "valid": True | False,
+                "phone_number_id": str,
+                "display_phone_number": str (if valid),
+                "error": reason (if invalid)
+            }
+        """
+        if not self._credentials_present():
+            return {
+                "valid": False,
+                "phone_number_id": self.phone_number_id,
+                "error": "Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID",
+            }
+
+        try:
+            response = requests.get(
+                f"{_GRAPH_API_BASE}/{self.phone_number_id}",
+                headers=self._auth_headers(),
+                params={"fields": "display_phone_number,verified_name"},
+                timeout=15,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "valid": True,
+                    "phone_number_id": self.phone_number_id,
+                    "display_phone_number": data.get("display_phone_number", ""),
+                    "verified_name": data.get("verified_name", ""),
+                }
+
+            return {
+                "valid": False,
+                "phone_number_id": self.phone_number_id,
+                "error": self._parse_api_error(response),
+            }
+
+        except Exception as e:
+            return {
+                "valid": False,
+                "phone_number_id": self.phone_number_id,
+                "error": str(e),
+            }
+
+    # ── Private Helpers ───────────────────────────────────────────────────────
+
+    def _auth_headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+
+    def _credentials_present(self) -> bool:
+        return bool(self.access_token and self.phone_number_id)
+
+    def _missing_credentials_error(self, to: str, text: str) -> Dict:
+        return {
+            "status": "error",
+            "to": to,
+            "text": text,
+            "error": (
+                "credentials_missing — set WHATSAPP_ACCESS_TOKEN and "
+                "WHATSAPP_PHONE_NUMBER_ID in .env"
+            ),
+        }
+
+    def _parse_api_error(self, response: requests.Response) -> str:
+        """Extract a readable error string from a failed API response."""
+        try:
+            body = response.json()
+            err = body.get("error", {})
+            code = err.get("code", response.status_code)
+            message = err.get("message", response.text)
+            return f"api_error_{code}: {message}"
+        except Exception:
+            return f"http_{response.status_code}: {response.text[:200]}"
 
 
-# MCP Server Entry Point (for Claude MCP registration)
-def main():
+# ── MCP Server Entry Point ────────────────────────────────────────────────────
+
+
+def main() -> None:
     """
-    MCP server entry point.
+    MCP server entry point (stdio JSON protocol).
 
-    When registered with: claude mcp add whatsapp "uv run python -m src.mcp.whatsapp_server"
+    Register with:
+      claude mcp add whatsapp "uv run python -m src.mcp.whatsapp_server"
     """
-    import json
-    import sys
-    from pathlib import Path
+    server = WhatsAppMCPServer()
 
-    # Load session path from environment or use default
-    import os
-
-    session_path = os.getenv(
-        "WHATSAPP_SESSION_PATH", str(Path.home() / ".whatsapp" / "session")
-    )
-
-    # Create server instance
-    server = WhatsAppMCPServer(session_path=session_path)
-
-    # Read MCP request from stdin
     request = json.loads(sys.stdin.read())
-
-    # Route request to appropriate method
     method = request.get("method")
     params = request.get("params", {})
 
-    if method == "send_message":
-        result = server.send_message(
-            to=params.get("to"),
-            text=params.get("text"),
-        )
-    elif method == "verify_session":
-        result = server.verify_session()
-    else:
-        result = {
-            "status": "error",
-            "error": f"Unknown method: {method}",
-        }
+    dispatch = {
+        "send_message": lambda: server.send_message(
+            to=params.get("to", ""),
+            text=params.get("text", ""),
+        ),
+        "send_template": lambda: server.send_template(
+            to=params.get("to", ""),
+            template_name=params.get("template_name", ""),
+            language=params.get("language", "en_US"),
+            components=params.get("components"),
+        ),
+        "verify_credentials": lambda: server.verify_credentials(),
+    }
 
-    # Write response to stdout
+    handler = dispatch.get(method)
+    if handler:
+        result = handler()
+    else:
+        result = {"status": "error", "error": f"Unknown method: {method}"}
+
     print(json.dumps(result))
 
 

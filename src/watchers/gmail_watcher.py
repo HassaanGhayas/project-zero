@@ -19,6 +19,7 @@ Usage:
 import os
 import time
 import logging
+import threading
 from pathlib import Path
 from typing import Dict, Any, List, Set, Optional
 from datetime import datetime, timezone
@@ -87,12 +88,76 @@ class GmailWatcher(BaseWatcher):
         self._max_backoff_interval = 3600  # 1 hour max
 
         # Email categorizer for priority determination (T039)
-        categorizer_config_path = Path(vault_path).parent / "config" / "known_contacts.yaml"
+        categorizer_config_path = (
+            Path(vault_path).parent / "config" / "known_contacts.yaml"
+        )
         self.categorizer = EmailCategorizer(categorizer_config_path, logger=self.logger)
 
         self.logger.info(
             f"GmailWatcher initialized (check_interval={self.gmail_check_interval}s)"
         )
+
+        # Threading state for start/stop
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+
+    def start(self) -> None:
+        """
+        Start the Gmail watcher in a background thread.
+
+        Creates a daemon thread that polls Gmail API at gmail_check_interval.
+        Thread runs until stop() is called or process terminates.
+        """
+        if self._running:
+            self.logger.warning("Gmail watcher is already running")
+            return
+
+        self._running = True
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        self.logger.info("Gmail watcher thread started")
+
+    def stop(self) -> None:
+        """
+        Stop the Gmail watcher gracefully.
+
+        Signals the background thread to stop and waits for it to finish.
+        """
+        if not self._running:
+            return
+
+        self.logger.info("Stopping Gmail watcher...")
+        self._running = False
+        self._stop_event.set()
+
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
+
+        self.logger.info("Gmail watcher stopped")
+
+    def _run_loop(self) -> None:
+        """
+        Background thread loop that polls Gmail API periodically.
+
+        Runs check_for_updates() every gmail_check_interval seconds until stopped.
+        Applies exponential backoff interval when rate limited.
+        """
+        while self._running and not self._stop_event.is_set():
+            try:
+                self.check_for_updates()
+            except Exception as e:
+                self.logger.error(f"Error in Gmail watcher loop: {e}", exc_info=True)
+
+            # Calculate sleep interval with backoff multiplier
+            sleep_interval = min(
+                self.gmail_check_interval * self._backoff_multiplier,
+                self._max_backoff_interval,
+            )
+
+            # Interruptible sleep using stop_event
+            self._stop_event.wait(timeout=sleep_interval)
 
     def _initialize_gmail_service(self) -> bool:
         """
@@ -221,7 +286,12 @@ class GmailWatcher(BaseWatcher):
             return
 
         try:
-            # Query Gmail API for unread important messages in inbox
+            # Query Gmail API for unread important messages in inbox.
+            # Query syntax:
+            #   is:unread - Only messages marked unread by Gmail's system
+            #   is:important - Only starred/marked-important by Gmail ML (not user starred)
+            #   label:inbox - Only in main inbox (excludes archive, spam, trash)
+            # This combination filters to actionable emails that Gmail considers important.
             query = "is:unread is:important label:inbox"
             results = (
                 self.service.users()
@@ -243,14 +313,17 @@ class GmailWatcher(BaseWatcher):
             for message_summary in messages:
                 message_id = message_summary["id"]
 
-                # Skip if already processed (duplicate prevention)
+                # Duplicate prevention (Constitution Section XII: idempotency)
+                # Gmail returns multiple copies of same message during development/testing,
+                # and rapid reruns might catch same unread messages.
+                # Store all processed IDs in memory for this watcher session.
+                # Note: Persists across checks but resets on watcher restart (acceptable for MVP).
                 if message_id in self._processed_message_ids:
-                    self.logger.debug(
-                        f"Skipping duplicate message {message_id[:8]}..."
-                    )
+                    self.logger.debug(f"Skipping duplicate message {message_id[:8]}...")
                     continue
 
-                # Fetch full message details
+                # Fetch full message details from Gmail API
+                # Note: Gmail returns message summaries first, then require full get() for headers/payload
                 message = (
                     self.service.users()
                     .messages()
@@ -261,7 +334,7 @@ class GmailWatcher(BaseWatcher):
                 # Create action file for this email
                 self.create_action_file(message)
 
-                # Mark as processed
+                # Mark as processed to prevent creating duplicate action files
                 self._processed_message_ids.add(message_id)
 
             # Successful API call, reset backoff if needed
@@ -269,11 +342,17 @@ class GmailWatcher(BaseWatcher):
 
         except HttpError as e:
             if e.resp.status == 429:
-                # Rate limit error - apply exponential backoff
+                # Rate limit error (HTTP 429) - Gmail API throttling
+                # Strategy: Exponential backoff (Constitution Section VIII: graceful degradation)
+                # - First backoff: 120s → 240s (2x multiplier)
+                # - Second backoff: 240s → 480s (4x multiplier)
+                # - Max backoff: 3600s (1 hour) to avoid service stall
+                # Rate limits typically reset after ~1 minute, but we back off longer to be safe
                 self.logger.warning("Gmail API rate limit exceeded (HTTP 429)")
                 self._handle_rate_limit_error()
             elif e.resp.status == 401 or e.resp.status == 403:
-                # Authentication error - token may be expired
+                # Authentication error - token may be expired or revoked
+                # Solution: User must re-authenticate via setup_gmail_oauth.py
                 self.logger.error(
                     "Gmail authentication failed. "
                     "Run scripts/setup_gmail_oauth.py to re-authenticate."
@@ -286,9 +365,7 @@ class GmailWatcher(BaseWatcher):
                 self._log_audit_event("gmail_api_error", {"error": str(e)}, "error")
 
         except Exception as e:
-            self.logger.error(
-                f"Unexpected error in Gmail check: {e}", exc_info=True
-            )
+            self.logger.error(f"Unexpected error in Gmail check: {e}", exc_info=True)
             self._log_audit_event("gmail_check_error", {"error": str(e)}, "error")
 
     def create_action_file(self, message: Dict[str, Any]) -> None:
@@ -318,7 +395,9 @@ class GmailWatcher(BaseWatcher):
         try:
             # Extract message metadata
             message_id = message["id"]
-            headers = {h["name"].lower(): h["value"] for h in message["payload"]["headers"]}
+            headers = {
+                h["name"].lower(): h["value"] for h in message["payload"]["headers"]
+            }
 
             sender = headers.get("from", "unknown@example.com")
             subject = headers.get("subject", "(No subject)")
@@ -344,7 +423,7 @@ class GmailWatcher(BaseWatcher):
                 sender_email=sender_email,
                 subject=subject,
                 snippet=snippet,
-                has_attachments=has_attachments
+                has_attachments=has_attachments,
             )
 
             # Generate YAML frontmatter
@@ -435,23 +514,40 @@ Based on Gmail Integration rules (Company_Handbook.md):
             )
 
     def _check_attachments(self, message: Dict[str, Any]) -> bool:
-        """Check if message has attachments."""
+        """
+        Check if message has attachments.
+
+        Gmail API payload structure for multipart messages:
+        - payload.parts[] contains message parts (body text, HTML, attachments)
+        - Each part has: mimeType, partId, headers[], body{}
+        - Attachments identified by: filename + body.attachmentId (not data blob)
+        - Non-attachment parts have: body.size but no attachmentId
+
+        Returns True only if at least one part has both filename and attachmentId.
+        """
         payload = message.get("payload", {})
         parts = payload.get("parts", [])
 
         for part in parts:
+            # Check for both filename and attachmentId to distinguish from inline images
             if part.get("filename") and part.get("body", {}).get("attachmentId"):
                 return True
 
         return False
 
     def _count_attachments(self, message: Dict[str, Any]) -> int:
-        """Count number of attachments in message."""
+        """
+        Count number of attachments in message.
+
+        Same Gmail API structure as _check_attachments, but returns count instead
+        of boolean. Used for informational purposes in action file frontmatter.
+        """
         payload = message.get("payload", {})
         parts = payload.get("parts", [])
 
         count = 0
         for part in parts:
+            # Count only parts with both filename and attachmentId
             if part.get("filename") and part.get("body", {}).get("attachmentId"):
                 count += 1
 

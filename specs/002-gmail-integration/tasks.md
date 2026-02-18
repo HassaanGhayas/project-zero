@@ -144,9 +144,9 @@
 - [X] T045 [P] Create tests/test_email_categorizer.py testing priority determination logic with various email scenarios
 - [X] T046 [P] Create tests/integration/test_gmail_e2e.py testing complete workflow (detection → approval → execution)
 - [X] T047 Run full test suite with uv run pytest tests/ -v and verify all Gmail tests pass
-- [ ] T048 Manual E2E test: Send test email, verify action file creation, approve, verify execution, check Gmail for archived message
-- [ ] T049 Test exponential backoff behavior by simulating rate limit errors (verify check_interval doubles up to 3600s max)
-- [ ] T050 Test OAuth token expiration handling (verify watcher pauses and logs clear re-authentication instructions)
+- [ ] T048 Manual E2E test: Send test email, verify action file creation, approve, verify execution, check Gmail for archived message (see tests/manual/T048_E2E_TEST_PROCEDURE.md)
+- [X] T049 Test exponential backoff behavior by simulating rate limit errors (verify check_interval doubles up to 3600s max)
+- [X] T050 Test OAuth token expiration handling (verify watcher pauses and logs clear re-authentication instructions)
 
 **Checkpoint**: All tests passing, Gmail integration validated end-to-end
 
@@ -156,14 +156,14 @@
 
 **Purpose**: User-facing documentation and code quality improvements
 
-- [ ] T051 [P] Create docs/GMAIL_SETUP.md with step-by-step OAuth2 setup instructions (Google Cloud Console, credentials.json, token.json)
-- [ ] T052 [P] Update README.md with Gmail integration section (prerequisites, configuration, usage)
-- [ ] T053 [P] Document known_contacts.yaml schema and usage examples in docs/
-- [ ] T054 [P] Add inline code comments to gmail_watcher.py explaining Gmail API query syntax and rate limit strategy
-- [ ] T055 [P] Update AI_Employee_Vault/Dashboard.md template to include Gmail watcher status row
-- [ ] T056 Run Black formatter on all new Python files (src/watchers/gmail_watcher.py, src/mcp/gmail_server.py, src/watchers/email_categorizer.py)
-- [ ] T057 Verify all NDJSON audit log entries are correctly formatted with complete context
-- [ ] T058 Final constitution compliance check: verify sections IV, V, VII, IX, XII requirements met
+- [X] T051 [P] Create docs/GMAIL_SETUP.md with step-by-step OAuth2 setup instructions (Google Cloud Console, credentials.json, token.json)
+- [X] T052 [P] Update README.md with Gmail integration section (prerequisites, configuration, usage)
+- [X] T053 [P] Document known_contacts.yaml schema and usage examples in docs/
+- [X] T054 [P] Add inline code comments to gmail_watcher.py explaining Gmail API query syntax and rate limit strategy
+- [X] T055 [P] Update AI_Employee_Vault/Dashboard.md template to include Gmail watcher status row
+- [X] T056 Run Black formatter on all new Python files (src/watchers/gmail_watcher.py, src/mcp/gmail_server.py, src/watchers/email_categorizer.py)
+- [X] T057 Verify all NDJSON audit log entries are correctly formatted with complete context
+- [X] T058 Final constitution compliance check: verify sections IV, V, VII, IX, XII requirements met
 
 **Checkpoint**: Feature complete, documented, and ready for production use
 

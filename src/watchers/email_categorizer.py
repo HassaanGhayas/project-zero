@@ -34,9 +34,7 @@ class EmailCategorizer:
     """
 
     def __init__(
-        self,
-        config_path: str | Path,
-        logger: Optional[logging.Logger] = None
+        self, config_path: str | Path, logger: Optional[logging.Logger] = None
     ):
         """
         Initialize email categorizer with known contacts configuration.
@@ -68,23 +66,25 @@ class EmailCategorizer:
             return
 
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             if not config:
-                self.logger.warning("Empty known contacts configuration. Using defaults.")
+                self.logger.warning(
+                    "Empty known contacts configuration. Using defaults."
+                )
                 return
 
             # Parse known contacts into lookup dictionary
-            contacts_list = config.get('known_contacts', [])
+            contacts_list = config.get("known_contacts", [])
             for contact in contacts_list:
-                email = contact.get('email')
+                email = contact.get("email")
                 if email:
                     self.known_contacts[email.lower()] = contact
 
             # Load financial keywords
             self.financial_keywords = [
-                kw.lower() for kw in config.get('financial_keywords', [])
+                kw.lower() for kw in config.get("financial_keywords", [])
             ]
 
             self.logger.info(
@@ -93,14 +93,18 @@ class EmailCategorizer:
             )
 
         except yaml.YAMLError as e:
-            self.logger.error(f"Failed to parse {self.config_path}: {e}. Using empty whitelist.")
+            self.logger.error(
+                f"Failed to parse {self.config_path}: {e}. Using empty whitelist."
+            )
         except Exception as e:
             self.logger.error(
                 f"Unexpected error loading {self.config_path}: {e}. Using empty whitelist.",
-                exc_info=True
+                exc_info=True,
             )
 
-    def _is_known_contact(self, sender_email: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    def _is_known_contact(
+        self, sender_email: str
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
         Check if sender is in known contacts list.
 
@@ -129,11 +133,7 @@ class EmailCategorizer:
         return any(keyword in combined_text for keyword in self.financial_keywords)
 
     def determine_priority(
-        self,
-        sender_email: str,
-        subject: str,
-        snippet: str,
-        has_attachments: bool
+        self, sender_email: str, subject: str, snippet: str, has_attachments: bool
     ) -> Tuple[str, str, List[str]]:
         """
         Determine email priority level based on categorization rules (T038).
@@ -171,13 +171,13 @@ class EmailCategorizer:
         # Priority determination logic
         if is_known and contact:
             # Known contact - check for override
-            priority_override = contact.get('priority_override')
-            contact_category = contact.get('category', 'unknown')
+            priority_override = contact.get("priority_override")
+            contact_category = contact.get("category", "unknown")
 
             if priority_override:
                 # Use explicit priority override
                 priority = priority_override
-            elif contact_category == 'newsletter':
+            elif contact_category == "newsletter":
                 # Newsletters always low priority unless override
                 priority = "low"
                 category = "newsletter"
@@ -216,7 +216,7 @@ class EmailCategorizer:
         category: str,
         is_known: bool,
         has_attachments: bool,
-        is_financial: bool
+        is_financial: bool,
     ) -> List[str]:
         """
         Generate priority-appropriate suggested actions.
@@ -241,7 +241,9 @@ class EmailCategorizer:
             if not is_known:
                 actions.append("⚠️  Unknown sender - verify legitimacy before action")
             if has_attachments:
-                actions.append("⚠️  Contains attachments - scan for security before opening")
+                actions.append(
+                    "⚠️  Contains attachments - scan for security before opening"
+                )
             if is_financial:
                 actions.append("💰 Financial email - verify transaction details")
             actions.append("Approve for archival only after thorough review")

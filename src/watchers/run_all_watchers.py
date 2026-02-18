@@ -90,14 +90,17 @@ def main():
         logger=setup_logging("gmail_watcher", vault_path),
     )
 
-    # 3. WhatsApp Watcher (WhatsApp Web → Needs_Action) - Silver Tier Phase 2
-    whatsapp_session_path = Path(
-        os.getenv("WHATSAPP_SESSION_PATH", str(Path.home() / ".whatsapp" / "session"))
+    # 3. WhatsApp Watcher (Business API queue → Needs_Action) - Silver Tier Phase 2
+    whatsapp_queue_file = Path(
+        os.getenv(
+            "WHATSAPP_QUEUE_FILE",
+            str(Path.home() / ".whatsapp" / "message_queue.json"),
+        )
     )
     whatsapp_check_interval = int(os.getenv("WHATSAPP_CHECK_INTERVAL", "30"))
     whatsapp_watcher = WhatsAppWatcher(
         vault_path=vault_path,
-        session_path=whatsapp_session_path,
+        queue_file=whatsapp_queue_file,
         check_interval=whatsapp_check_interval,
         logger=setup_logging("whatsapp_watcher", vault_path),
     )

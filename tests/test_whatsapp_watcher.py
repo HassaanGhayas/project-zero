@@ -1,17 +1,20 @@
 """
-Unit tests for WhatsApp Watcher
+Unit tests for WhatsApp Watcher (Business API edition)
 
-Tests message detection, duplicate prevention, keyword filtering, action file generation.
-Uses mocks to avoid real browser automation during testing.
+Tests message detection, duplicate prevention, keyword filtering, queue reading,
+and action file generation. Uses a temp JSON queue file instead of browser mocks.
 """
 
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime
 
 from src.watchers.whatsapp_watcher import WhatsAppWatcher
+
+
+# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
@@ -24,11 +27,12 @@ def vault_path(tmp_path):
 
 
 @pytest.fixture
-def session_path(tmp_path):
-    """Create temporary session storage path."""
-    session = tmp_path / ".whatsapp" / "session"
-    session.mkdir(parents=True)
-    return session
+def queue_file(tmp_path):
+    """Create an empty message queue JSON file."""
+    queue = tmp_path / ".whatsapp" / "message_queue.json"
+    queue.parent.mkdir(parents=True)
+    queue.write_text(json.dumps([]), encoding="utf-8")
+    return queue
 
 
 @pytest.fixture
@@ -43,71 +47,67 @@ def mock_logger():
 
 
 @pytest.fixture
-def whatsapp_watcher(vault_path, session_path, mock_logger):
-    """Create WhatsAppWatcher instance with mocked dependencies."""
-    # Create keywords config
+def whatsapp_watcher(vault_path, queue_file, mock_logger):
+    """Create WhatsAppWatcher instance with temp queue file and keywords config."""
     config_path = Path("config/whatsapp_keywords.yaml")
     config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("keywords:\n  - urgent\n  - payment\n  - help\n")
 
-    with open(config_path, "w") as f:
-        f.write("keywords:\n  - urgent\n  - payment\n  - help\n")
+    watcher = WhatsAppWatcher(
+        vault_path=vault_path,
+        queue_file=queue_file,
+        check_interval=30,
+        logger=mock_logger,
+    )
+    return watcher
 
-    with patch("src.watchers.logger_config.setup_logging", return_value=mock_logger):
-        watcher = WhatsAppWatcher(
-            vault_path=vault_path,
-            session_path=session_path,
-            check_interval=30,
-            logger=mock_logger,
-        )
-        return watcher
+
+def _write_queue(queue_file: Path, messages: list) -> None:
+    """Helper: write messages to the queue file."""
+    queue_file.write_text(json.dumps(messages, indent=2), encoding="utf-8")
+
+
+def _make_message(
+    msg_id: str = "test_001",
+    sender: str = "Client A",
+    text: str = "Urgent: Need help with payment",
+) -> dict:
+    """Helper: build a minimal message dict."""
+    return {
+        "id": msg_id,
+        "from": "15551234567",
+        "sender": sender,
+        "text": text,
+        "type": "text",
+        "timestamp": "2026-02-18T10:00:00",
+        "received_at": "2026-02-18T10:00:00",
+        "processed": False,
+    }
+
+
+# ── Tests: Message Detection ──────────────────────────────────────────────────
 
 
 class TestMessageDetection:
-    """Test WhatsApp message detection and filtering."""
+    def test_detect_message_with_keyword(self, whatsapp_watcher, queue_file):
+        """Messages containing a priority keyword create action files."""
+        _write_queue(queue_file, [_make_message(text="Urgent payment needed")])
 
-    def test_detect_message_with_keyword(self, whatsapp_watcher):
-        """Test detection of message containing priority keyword."""
-        # Mock message with keyword
-        mock_message = {
-            "id": "contact_12345678",
-            "sender": "Client A",
-            "text": "Urgent: Need help with payment invoice",
-            "timestamp": "2026-02-14T20:30:00Z",
-        }
+        whatsapp_watcher.check_for_updates()
 
-        # Mock _scan_whatsapp_web to return message
-        with patch.object(
-            whatsapp_watcher, "_scan_whatsapp_web", return_value=[mock_message]
-        ):
-            whatsapp_watcher.check_for_updates()
+        files = list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        assert len(files) == 1
 
-        # Verify action file was created
-        needs_action_files = list(
-            (whatsapp_watcher.vault_path / "Needs_Action").glob("*.md")
-        )
-        assert len(needs_action_files) > 0, "No action file created for keyword message"
+    def test_action_file_contains_required_fields(self, whatsapp_watcher, queue_file):
+        """Generated action files include all required YAML frontmatter fields."""
+        _write_queue(queue_file, [_make_message(text="Help needed urgently")])
 
-    def test_action_file_contains_required_fields(self, whatsapp_watcher):
-        """Test that generated action files have all required YAML fields."""
-        mock_message = {
-            "id": "boss_87654321",
-            "sender": "Boss",
-            "text": "Help needed ASAP with client presentation",
-            "timestamp": "2026-02-14T21:00:00Z",
-        }
+        whatsapp_watcher.check_for_updates()
 
-        with patch.object(
-            whatsapp_watcher, "_scan_whatsapp_web", return_value=[mock_message]
-        ):
-            whatsapp_watcher.check_for_updates()
+        files = list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        assert len(files) == 1
 
-        # Read generated file and verify fields
-        action_files = list(
-            (whatsapp_watcher.vault_path / "Needs_Action").glob("*.md")
-        )
-        assert len(action_files) > 0
-
-        content = action_files[0].read_text()
+        content = files[0].read_text()
         required_fields = [
             "type: message",
             "whatsapp_message_id:",
@@ -118,70 +118,137 @@ class TestMessageDetection:
             "has_attachments:",
             "category: whatsapp_message",
         ]
-
         for field in required_fields:
             assert field in content, f"Missing required field: {field}"
 
+    def test_no_action_file_for_no_keyword(self, whatsapp_watcher, queue_file):
+        """Messages without priority keywords are silently ignored."""
+        _write_queue(queue_file, [_make_message(text="Hey, how are you?")])
+
+        whatsapp_watcher.check_for_updates()
+
+        files = list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        assert len(files) == 0
+
+    def test_empty_queue_no_action_files(self, whatsapp_watcher, queue_file):
+        """Empty queue produces no action files."""
+        whatsapp_watcher.check_for_updates()
+
+        files = list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        assert len(files) == 0
+
+
+# ── Tests: Duplicate Prevention ───────────────────────────────────────────────
+
 
 class TestDuplicatePrevention:
-    """Test duplicate prevention across multiple check cycles."""
+    def test_duplicate_message_not_processed_twice(self, whatsapp_watcher, queue_file):
+        """The same message ID is not processed more than once per session."""
+        msg = _make_message(msg_id="dup_001", text="Urgent payment reminder")
+        _write_queue(queue_file, [msg])
 
-    def test_duplicate_message_not_processed_twice(self, whatsapp_watcher):
-        """Test that same message ID isn't processed twice."""
-        mock_message = {
-            "id": "duplicate_test_123",
-            "sender": "Contact",
-            "text": "Urgent payment reminder",
-            "timestamp": "2026-02-14T22:00:00Z",
-        }
+        whatsapp_watcher.check_for_updates()
+        first_count = len(
+            list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        )
 
-        with patch.object(
-            whatsapp_watcher, "_scan_whatsapp_web", return_value=[mock_message]
-        ):
-            # First check - should create action file
-            whatsapp_watcher.check_for_updates()
-            first_check_files = list(
-                (whatsapp_watcher.vault_path / "Needs_Action").glob("*.md")
-            )
-            first_count = len(first_check_files)
+        # Queue is now all-processed; inject same ID via processed_ids shortcut
+        _write_queue(queue_file, [msg])
+        whatsapp_watcher.check_for_updates()
+        second_count = len(
+            list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        )
 
-            # Second check with same message - should NOT create duplicate
-            whatsapp_watcher.check_for_updates()
-            second_check_files = list(
-                (whatsapp_watcher.vault_path / "Needs_Action").glob("*.md")
-            )
-            second_count = len(second_check_files)
+        assert first_count == 1
+        assert second_count == 1  # No new file
+        assert "dup_001" in whatsapp_watcher._processed_message_ids
 
-        assert first_count == second_count, "Duplicate file created despite prevention"
-        assert "duplicate_test_123" in whatsapp_watcher._processed_message_ids
+    def test_queue_messages_marked_processed(self, whatsapp_watcher, queue_file):
+        """After processing, all queue entries are marked processed=True."""
+        msgs = [
+            _make_message(msg_id="m1", text="urgent help"),
+            _make_message(msg_id="m2", text="payment due"),
+        ]
+        _write_queue(queue_file, msgs)
+
+        whatsapp_watcher.check_for_updates()
+
+        updated = json.loads(queue_file.read_text())
+        assert all(m["processed"] for m in updated)
+
+
+# ── Tests: Keyword Filtering ──────────────────────────────────────────────────
 
 
 class TestKeywordFiltering:
-    """Test keyword-based message filtering."""
+    def test_keyword_matching_is_case_insensitive(self, whatsapp_watcher, queue_file):
+        """Keyword matching works regardless of message case."""
+        _write_queue(queue_file, [_make_message(text="URGENT meeting at 3pm")])
 
-    def test_keyword_matching_case_insensitive(self, whatsapp_watcher):
-        """Test that keyword matching is case-insensitive."""
-        # Message with uppercase keyword
-        mock_message = {
-            "id": "uppercase_test",
-            "sender": "Contact",
-            "text": "URGENT message here",
-            "timestamp": "2026-02-14T23:00:00Z",
-        }
+        whatsapp_watcher.check_for_updates()
 
-        # For this test, we're verifying that the watcher's keyword list
-        # is correctly loaded and would match case-insensitively
-        # The actual filtering happens in _scan_whatsapp_web (Playwright side)
+        files = list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        assert len(files) == 1
 
+    def test_keywords_loaded_correctly(self, whatsapp_watcher):
+        """Keywords config is loaded and contains expected entries."""
         assert "urgent" in whatsapp_watcher.keywords
-        assert len(whatsapp_watcher.keywords) > 0
+        assert "payment" in whatsapp_watcher.keywords
+        assert len(whatsapp_watcher.keywords) >= 3
+
+    def test_multiple_keyword_messages_all_processed(self, whatsapp_watcher, queue_file):
+        """All keyword-matching messages in a batch create action files."""
+        msgs = [
+            _make_message(msg_id="k1", text="urgent issue"),
+            _make_message(msg_id="k2", text="help needed"),
+            _make_message(msg_id="k3", text="payment overdue"),
+        ]
+        _write_queue(queue_file, msgs)
+
+        whatsapp_watcher.check_for_updates()
+
+        files = list((whatsapp_watcher.vault_path / "Needs_Action").glob("*.md"))
+        assert len(files) == 3
+
+
+# ── Tests: Queue Reading ──────────────────────────────────────────────────────
+
+
+class TestQueueReading:
+    def test_missing_queue_file_returns_empty(self, whatsapp_watcher, tmp_path):
+        """Watcher handles absent queue file gracefully."""
+        watcher = WhatsAppWatcher(
+            vault_path=whatsapp_watcher.vault_path,
+            queue_file=tmp_path / "nonexistent.json",
+            logger=whatsapp_watcher.logger,
+        )
+        result = watcher._read_message_queue()
+        assert result == []
+
+    def test_corrupt_queue_file_returns_empty(self, whatsapp_watcher, queue_file):
+        """Watcher handles a corrupt queue file without crashing."""
+        queue_file.write_text("not valid json", encoding="utf-8")
+        result = whatsapp_watcher._read_message_queue()
+        assert result == []
+
+    def test_already_processed_messages_skipped(self, whatsapp_watcher, queue_file):
+        """Messages with processed=True are not returned."""
+        msgs = [
+            {**_make_message(msg_id="p1", text="urgent"), "processed": True},
+            {**_make_message(msg_id="p2", text="payment"), "processed": True},
+        ]
+        _write_queue(queue_file, msgs)
+
+        result = whatsapp_watcher._read_message_queue()
+        assert result == []
+
+
+# ── Tests: Threading Lifecycle ────────────────────────────────────────────────
 
 
 class TestThreadingLifecycle:
-    """Test watcher threading lifecycle."""
-
     def test_start_creates_background_thread(self, whatsapp_watcher):
-        """Test that start() creates a daemon thread."""
+        """start() spawns a daemon thread."""
         whatsapp_watcher.start()
 
         assert whatsapp_watcher._running is True
@@ -189,150 +256,123 @@ class TestThreadingLifecycle:
         assert whatsapp_watcher._thread.daemon is True
         assert whatsapp_watcher._thread.is_alive()
 
-        # Cleanup
         whatsapp_watcher.stop()
 
     def test_stop_gracefully_terminates_thread(self, whatsapp_watcher):
-        """Test that stop() gracefully terminates the background thread."""
+        """stop() joins the background thread cleanly."""
         whatsapp_watcher.start()
         assert whatsapp_watcher._running is True
 
         whatsapp_watcher.stop()
 
         assert whatsapp_watcher._running is False
-        # Thread should finish within timeout
         if whatsapp_watcher._thread:
             whatsapp_watcher._thread.join(timeout=1.0)
             assert not whatsapp_watcher._thread.is_alive()
 
 
+# ── Tests: Emergency Stop ─────────────────────────────────────────────────────
+
+
 class TestEmergencyStop:
-    """Test emergency stop mechanism."""
+    def test_emergency_stop_prevents_queue_reading(self, whatsapp_watcher, queue_file):
+        """EMERGENCY_STOP.md prevents any queue polling."""
+        emergency_path = whatsapp_watcher.vault_path / "EMERGENCY_STOP.md"
+        emergency_path.write_text("# Emergency Stop\nAll watchers paused.")
 
-    def test_emergency_stop_prevents_polling(self, whatsapp_watcher):
-        """Test that EMERGENCY_STOP.md prevents WhatsApp polling."""
-        # Create emergency stop file
-        emergency_stop_path = whatsapp_watcher.vault_path / "EMERGENCY_STOP.md"
-        emergency_stop_path.write_text("# Emergency Stop\nAll watchers paused.")
+        _write_queue(queue_file, [_make_message(text="urgent")])
 
-        # Mock _scan_whatsapp_web to track if it's called
         with patch.object(
-            whatsapp_watcher, "_scan_whatsapp_web", return_value=[]
-        ) as mock_scan:
+            whatsapp_watcher, "_read_message_queue", return_value=[]
+        ) as mock_read:
             whatsapp_watcher.check_for_updates()
+            mock_read.assert_not_called()
 
-            # Verify scanning was skipped
-            mock_scan.assert_not_called()
+
+# ── Tests: Audit Logging ──────────────────────────────────────────────────────
 
 
 class TestAuditLogging:
-    """Test NDJSON audit logging for WhatsApp events."""
+    def test_message_detected_event_logged(self, whatsapp_watcher, queue_file):
+        """whatsapp_message_detected entries appear in the NDJSON audit log."""
+        _write_queue(queue_file, [_make_message(text="urgent payment")])
 
-    def test_message_detected_event_logged(self, whatsapp_watcher):
-        """Test that whatsapp_message_detected events are logged to NDJSON."""
-        mock_message = {
-            "id": "audit_test_msg",
-            "sender": "Test Contact",
-            "text": "Payment urgent reminder",
-            "timestamp": "2026-02-15T00:00:00Z",
-        }
+        whatsapp_watcher.check_for_updates()
 
-        with patch.object(
-            whatsapp_watcher, "_scan_whatsapp_web", return_value=[mock_message]
-        ):
-            whatsapp_watcher.check_for_updates()
-
-        # Verify audit log was created
         from datetime import date
 
-        today = date.today().isoformat()
-        log_file = whatsapp_watcher.vault_path / "Logs" / f"{today}.json"
+        log_file = (
+            whatsapp_watcher.vault_path / "Logs" / f"{date.today().isoformat()}.json"
+        )
+        assert log_file.exists(), "Audit log file not created"
 
-        if log_file.exists():
-            with open(log_file) as f:
-                lines = f.readlines()
-                assert len(lines) > 0, "No audit log entries"
+        lines = log_file.read_text().splitlines()
+        assert len(lines) > 0
 
-                # Verify NDJSON format
-                for line in lines:
-                    entry = json.loads(line)
-                    assert "timestamp" in entry
-                    assert "action_type" in entry
+        events = [json.loads(ln) for ln in lines if ln.strip()]
+        whatsapp_events = [
+            e for e in events if "whatsapp" in e.get("action_type", "")
+        ]
+        assert len(whatsapp_events) > 0, "No WhatsApp events in audit log"
 
-                # Check for whatsapp_message_detected event
-                events = [json.loads(line) for line in lines]
-                whatsapp_events = [
-                    e for e in events if "whatsapp" in e.get("action_type", "")
-                ]
-                assert len(whatsapp_events) > 0, "No WhatsApp events logged"
+    def test_audit_entries_are_valid_ndjson(self, whatsapp_watcher, queue_file):
+        """Every audit log line is valid JSON with required keys."""
+        _write_queue(queue_file, [_make_message(text="urgent")])
+        whatsapp_watcher.check_for_updates()
+
+        from datetime import date
+
+        log_file = (
+            whatsapp_watcher.vault_path / "Logs" / f"{date.today().isoformat()}.json"
+        )
+        for line in log_file.read_text().splitlines():
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            assert "timestamp" in entry
+            assert "action_type" in entry
+
+
+# ── Tests: Error Handling ─────────────────────────────────────────────────────
 
 
 class TestErrorHandling:
-    """Test error handling and recovery."""
-
-    def test_scan_error_logged_and_watcher_continues(self, whatsapp_watcher):
-        """Test that errors in scanning are logged but watcher continues."""
-        # Mock _scan_whatsapp_web to raise exception
+    def test_queue_read_error_logged_and_watcher_continues(self, whatsapp_watcher):
+        """Errors during queue reading are logged but do not crash the watcher."""
         with patch.object(
             whatsapp_watcher,
-            "_scan_whatsapp_web",
-            side_effect=Exception("Browser connection failed"),
+            "_read_message_queue",
+            side_effect=RuntimeError("Disk read error"),
         ):
-            # Should not crash, just log error
-            whatsapp_watcher.check_for_updates()
+            whatsapp_watcher.check_for_updates()  # must not raise
 
-            # Verify error was logged
-            error_calls = [str(call) for call in whatsapp_watcher.logger.error.call_args_list]
-            assert any("error" in str(call).lower() for call in error_calls)
+        error_calls = [str(c) for c in whatsapp_watcher.logger.error.call_args_list]
+        assert any("error" in c.lower() for c in error_calls)
+
+
+# ── Tests: Action File Generation ─────────────────────────────────────────────
 
 
 class TestActionFileGeneration:
-    """Test action file structure and content."""
-
     def test_action_file_yaml_structure(self, whatsapp_watcher):
-        """Test that action file YAML is properly formatted."""
-        mock_message = {
-            "id": "yaml_test_123",
-            "sender": "YAML Test Contact",
-            "text": "Help with urgent issue",
-            "timestamp": "2026-02-15T01:00:00Z",
-        }
+        """Generated action files start with valid YAML frontmatter."""
+        msg = _make_message(msg_id="yaml_001", sender="YAML Contact", text="Help me")
+        action_file = whatsapp_watcher.create_action_file(msg)
 
-        action_file = whatsapp_watcher.create_action_file(mock_message)
-
-        # Read file and parse YAML
         content = action_file.read_text()
-
-        # Verify YAML delimiters
         assert content.startswith("---\n")
         assert "\n---\n" in content
-
-        # Verify key fields present
         assert "type: message" in content
-        assert "sender: YAML Test Contact" in content
-        assert "priority: high" in content
         assert "status: pending" in content
+        assert "priority: high" in content
 
     def test_action_file_markdown_sections(self, whatsapp_watcher):
-        """Test that action file has proper markdown sections."""
-        mock_message = {
-            "id": "markdown_test",
-            "sender": "Contact Name",
-            "text": "Payment due urgent",
-            "timestamp": "2026-02-15T02:00:00Z",
-        }
-
-        action_file = whatsapp_watcher.create_action_file(mock_message)
+        """Generated action files contain all required markdown sections."""
+        msg = _make_message(msg_id="md_001", sender="Section Tester", text="payment")
+        action_file = whatsapp_watcher.create_action_file(msg)
         content = action_file.read_text()
 
-        # Verify markdown sections
-        required_sections = [
-            "## Message Details",
-            "## Suggested Actions",
-            "## Audit Context",
-        ]
-
-        for section in required_sections:
+        for section in ["## Message Details", "## Suggested Actions", "## Audit Context"]:
             assert section in content, f"Missing section: {section}"
 
 

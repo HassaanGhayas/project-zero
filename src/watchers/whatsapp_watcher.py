@@ -1,11 +1,16 @@
 """
-WhatsApp Watcher - Monitor WhatsApp Web for priority messages
+WhatsApp Watcher - Monitor WhatsApp Business API for priority messages
 
-Polls WhatsApp Web using Playwright browser automation to detect unread messages
-containing priority keywords. Generates action files for human approval.
+Polls a local message queue (populated by src/api/whatsapp_webhook.py) to detect
+incoming WhatsApp messages containing priority keywords. Generates action files for
+human approval.
+
+Architecture:
+  Meta Cloud API → POST /webhook → whatsapp_webhook.py → message_queue.json
+  WhatsAppWatcher (this file) ←── polls queue every 30s ──────────────────────
 
 Constitution Compliance:
-- Section V: Browser session stored in ~/.whatsapp/session (not in repo)
+- Section V:   API credentials in .env, never logged or committed
 - Section VII: Comprehensive audit logging to NDJSON
 - Section VIII: Graceful error handling with recovery
 - Section XII: Human-in-the-loop approval via status field
@@ -13,8 +18,8 @@ Constitution Compliance:
 """
 
 import json
+import os
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -36,7 +41,7 @@ class WhatsAppWatcher(BaseWatcher):
     def __init__(
         self,
         vault_path: Path,
-        session_path: Path,
+        queue_file: Optional[Path] = None,
         check_interval: int = 30,
         logger=None,
     ):
@@ -45,13 +50,19 @@ class WhatsAppWatcher(BaseWatcher):
 
         Args:
             vault_path: Path to AI_Employee_Vault directory
-            session_path: Path to browser session storage directory
+            queue_file: Path to local message queue JSON file written by webhook server.
+                        Defaults to ~/.whatsapp/message_queue.json
             check_interval: Polling interval in seconds (default: 30)
             logger: Optional logger instance
         """
         super().__init__(vault_path, check_interval, logger)
-        self.session_path = Path(session_path)
-        self.session_path.mkdir(parents=True, exist_ok=True)
+
+        self.queue_file = queue_file or Path(
+            os.getenv(
+                "WHATSAPP_QUEUE_FILE",
+                str(Path.home() / ".whatsapp" / "message_queue.json"),
+            )
+        )
 
         # Load keywords from config file
         self.keywords = self._load_keywords()
@@ -64,12 +75,9 @@ class WhatsAppWatcher(BaseWatcher):
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
-        # Browser automation will use Playwright MCP
-        self._browser_initialized = False
-
         self.logger.info(
             f"WhatsAppWatcher initialized (check_interval={check_interval}s, "
-            f"keywords={len(self.keywords)})"
+            f"keywords={len(self.keywords)}, queue={self.queue_file})"
         )
 
     def _load_keywords(self) -> List[str]:
@@ -158,7 +166,7 @@ class WhatsAppWatcher(BaseWatcher):
             # Note: In production, this would use Playwright MCP server
             # For now, we'll implement the core logic structure
 
-            messages = self._scan_whatsapp_web()
+            messages = self._read_message_queue()
 
             if messages:
                 self.logger.info(
@@ -202,39 +210,57 @@ class WhatsAppWatcher(BaseWatcher):
                 parameters={"error": str(e)},
             )
 
-    def _scan_whatsapp_web(self) -> List[Dict]:
+    def _read_message_queue(self) -> List[Dict]:
         """
-        Scan WhatsApp Web for unread messages using Playwright.
+        Read unprocessed messages from the local WhatsApp message queue.
 
-        This is a placeholder implementation. In production, this would:
-        1. Launch persistent browser context (session_path)
-        2. Navigate to web.whatsapp.com
-        3. Wait for page load (handle QR code on first run)
-        4. Query for unread chats [aria-label*="unread"]
-        5. Extract sender, message preview, timestamp
-        6. Filter by keywords
-        7. Return list of matching messages
+        The queue file is written by the webhook server (src/api/whatsapp_webhook.py)
+        which receives real-time POST events from Meta's Cloud API.
 
         Returns:
-            List of message dictionaries with id, sender, text, timestamp
+            List of message dicts that (a) are unprocessed and (b) contain a keyword.
         """
-        # TODO: Implement Playwright browser automation
-        # For now, return empty list (no messages)
-        # This will be implemented using Playwright MCP server calls
+        if not self.queue_file.exists():
+            self.logger.debug("Queue file not found — webhook server may not be running")
+            return []
 
-        messages = []
+        try:
+            with open(self.queue_file, "r", encoding="utf-8") as f:
+                all_messages: List[Dict] = json.loads(f.read())
+        except (json.JSONDecodeError, OSError) as e:
+            self.logger.error(f"Failed to read queue file {self.queue_file}: {e}")
+            return []
 
-        # Placeholder structure for what would be returned:
-        # messages = [
-        #     {
-        #         "id": f"{sender}_{hash(preview)}",
-        #         "sender": "Contact Name",
-        #         "text": "Message preview text...",
-        #         "timestamp": datetime.now().isoformat(),
-        #     }
-        # ]
+        unprocessed = [m for m in all_messages if not m.get("processed", False)]
 
-        return messages
+        if not unprocessed:
+            return []
+
+        # Mark all as processed so we don't re-deliver them
+        for msg in all_messages:
+            msg["processed"] = True
+        try:
+            with open(self.queue_file, "w", encoding="utf-8") as f:
+                f.write(json.dumps(all_messages, indent=2))
+        except OSError as e:
+            self.logger.error(f"Failed to update queue file: {e}")
+
+        # Filter by priority keywords (case-insensitive)
+        matching: List[Dict] = []
+        for msg in unprocessed:
+            text = msg.get("text", "").lower()
+            if any(kw.lower() in text for kw in self.keywords):
+                matching.append(msg)
+            else:
+                self.logger.debug(
+                    f"No keyword match for message from {msg.get('sender')!r} — skipping"
+                )
+
+        self.logger.debug(
+            f"Queue: {len(unprocessed)} unprocessed, "
+            f"{len(matching)} keyword match(es)"
+        )
+        return matching
 
     def create_action_file(self, message: Dict) -> Path:
         """
