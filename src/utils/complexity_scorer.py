@@ -23,6 +23,8 @@ _STAKEHOLDER_PATTERN = re.compile(
 
 def complexity_score(text: str) -> int:
     """Score a task description for SDD loop auto-trigger. Returns 0–4."""
+    if not text:
+        return 0
     score = 0
     if len(text.split()) > 200:
         score += 1
