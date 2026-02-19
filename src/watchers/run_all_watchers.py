@@ -1,12 +1,13 @@
 """
 Master orchestrator for all AI Employee watchers.
 
-This script runs five watchers simultaneously:
+This script runs six watchers simultaneously:
 1. Filesystem Watcher - Monitors Inbox/ for new file drops
 2. Gmail Watcher - Monitors Gmail for unread important emails (Silver Tier Phase 1)
 3. WhatsApp Watcher - Monitors WhatsApp Web for priority messages (Silver Tier Phase 2)
 4. Status Field Watcher - Monitors Needs_Action/ for user approvals/rejections
 5. Approved Watcher - Monitors Approved/ for immediate execution
+6. LinkedIn Watcher - Monitors Pending_Approval/ for LinkedIn posts (Silver Tier Phase 3)
 
 Complete workflow:
   File drops in Inbox/ → Action file created in Needs_Action/ →
@@ -31,19 +32,22 @@ from pathlib import Path
 from .approved_watcher import ApprovedWatcher
 from .filesystem_watcher import FileSystemWatcher
 from .gmail_watcher import GmailWatcher
+from .linkedin_watcher import LinkedInWatcher
 from .logger_config import setup_logging
 from .status_field_watcher import StatusFieldWatcher
 from .whatsapp_watcher import WhatsAppWatcher
+from src.mcp.linkedin_server import create_server_from_env
 
 
 def main():
     """
-    Start all five watchers and run until interrupted.
+    Start all six watchers and run until interrupted.
 
     Watchers run in parallel:
     - Filesystem watcher (Inbox/ → Needs_Action/)
     - Gmail watcher (Gmail API → Needs_Action/) - Silver Tier Phase 1
     - WhatsApp watcher (WhatsApp Web → Needs_Action/) - Silver Tier Phase 2
+    - LinkedIn watcher (Pending_Approval/ → LinkedIn API) - Silver Tier Phase 3
     - Status field watcher (Needs_Action/ → Approved/Rejected/)
     - Approved watcher (Approved/ → execute → In_Progress/)
     """
@@ -105,6 +109,21 @@ def main():
         logger=setup_logging("whatsapp_watcher", vault_path),
     )
 
+    # 6. LinkedIn Watcher (Pending_Approval → LinkedIn API) - Silver Tier Phase 3
+    linkedin_check_interval = int(os.getenv("LINKEDIN_CHECK_INTERVAL", "60"))
+    try:
+        linkedin_server = create_server_from_env()
+        linkedin_watcher = LinkedInWatcher(
+            vault_path=str(vault_path),
+            linkedin_server=linkedin_server,
+            check_interval=linkedin_check_interval,
+            logger=setup_logging("linkedin_watcher", vault_path),
+        )
+        linkedin_watcher_available = True
+    except Exception as e:
+        logger.warning(f"LinkedIn watcher not available (token not configured): {e}")
+        linkedin_watcher_available = False
+
     # 4. Status Field Watcher (Needs_Action → Approved/Rejected)
     status_watcher = StatusFieldWatcher(
         vault_path=vault_path, logger=setup_logging("status_field_watcher", vault_path)
@@ -124,6 +143,8 @@ def main():
         fs_watcher.stop()
         gmail_watcher.stop()
         whatsapp_watcher.stop()
+        if linkedin_watcher_available:
+            linkedin_watcher.stop()
         status_watcher.stop()
         approved_watcher.stop()
 
@@ -147,6 +168,12 @@ def main():
 
         whatsapp_watcher.start()
         logger.info("✅ WhatsApp watcher started (WhatsApp Web → Needs_Action/)")
+
+        if linkedin_watcher_available:
+            linkedin_watcher.start()
+            logger.info("✅ LinkedIn watcher started (Pending_Approval/ → LinkedIn API)")
+        else:
+            logger.info("⚠️  LinkedIn watcher skipped (run docs/LINKEDIN_SETUP.md to configure)")
 
         status_watcher.start()
         logger.info(
