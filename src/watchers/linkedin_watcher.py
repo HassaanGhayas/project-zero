@@ -22,7 +22,7 @@ class LinkedInWatcher(BaseWatcher):
     def __init__(
         self,
         vault_path: str,
-        linkedin_server,
+        linkedin_server: "LinkedInServer",
         check_interval: int = 60,
         logger: Optional[logging.Logger] = None,
     ) -> None:
@@ -63,12 +63,13 @@ class LinkedInWatcher(BaseWatcher):
         self.logger.info(f"Publishing LinkedIn post from {action_file.name}")
         try:
             result = self.linkedin_server.post_text(post_text)
-            self.logger.info(f"Published: {result.get('id')}")
-            self._log_audit(action_file.name, "linkedin_post_published", result.get("id", ""))
-            action_file.rename(self.done_dir / action_file.name)
         except Exception as e:
             self.logger.error(f"Failed to publish {action_file.name}: {e}")
             self._log_audit(action_file.name, "linkedin_post_failed", str(e))
+            return
+        self.logger.info(f"Published: {result.get('id')}")
+        action_file.rename(self.done_dir / action_file.name)
+        self._log_audit(action_file.name, "linkedin_post_published", result.get("id", ""))
 
     def _parse_action_file(self, path: Path) -> tuple[dict, str]:
         text = path.read_text()
@@ -86,5 +87,6 @@ class LinkedInWatcher(BaseWatcher):
             "detail": detail,
         }
         log_file = self.logs_dir / "audit.json"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
         with open(log_file, "a") as f:
             f.write(json.dumps(entry) + "\n")
