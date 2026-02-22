@@ -1,0 +1,14 @@
+# config/schedule.yaml
+# Project Zero cron schedule.
+# Read by scripts/install_cron.sh to generate crontab entries.
+
+jobs:
+  - name: daily_vault_report
+    cron: "0 8 * * *"
+    script: scripts/cron_vault_report.sh
+    description: "Daily vault status report (8am)"
+
+  - name: weekly_dashboard_reset
+    cron: "0 9 * * 1"
+    script: scripts/cron_dashboard_reset.sh
+    description: "Weekly Dashboard.md regeneration (Monday 9am)"
