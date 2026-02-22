@@ -34,6 +34,7 @@ class Supervisor:
         self._proc: subprocess.Popen | None = None
         self._running: bool = True
         self._start_time: float | None = None
+        self._supervisor_started_at: str = datetime.now(timezone.utc).isoformat()
 
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
@@ -69,10 +70,10 @@ class Supervisor:
 
     def _write_state(self, status: str = "running") -> None:
         state = {
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": self._supervisor_started_at,
             "restart_count": self.restart_count,
             "last_exit_code": self._proc.returncode if self._proc else None,
-            "backoff_seconds": self._compute_backoff(),
+            "backoff_seconds": self._compute_backoff() if status in ("running", "restarting") else None,
             "status": status,
         }
         try:
