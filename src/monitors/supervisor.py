@@ -73,7 +73,7 @@ class Supervisor:
             "started_at": self._supervisor_started_at,
             "restart_count": self.restart_count,
             "last_exit_code": self._proc.returncode if self._proc else None,
-            "backoff_seconds": self._compute_backoff() if status in ("running", "restarting") else None,
+            "backoff_seconds": self._compute_backoff() if status == "restarting" else None,
             "status": status,
         }
         try:
