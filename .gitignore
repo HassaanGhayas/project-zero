@@ -1,10 +1,15 @@
 # Secrets - NEVER commit (Constitution Section V)
 .env
-.env.*
+.env.local
+.env.*.local
 credentials.json
 *.key
 *.pem
 *.secret
+.whatsapp/
+config/whatsapp_session/
+# But DO commit .env.example
+!.env.example
 
 # Python
 __pycache__/

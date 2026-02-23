@@ -92,6 +92,26 @@ From today's log file, filter entries where `result` equals `"error"` in the las
 
 If no errors found, display: `No errors logged`
 
+### Step 7.5: Read Supervisor State
+
+Read `AI_Employee_Vault/supervisor_state.json` if it exists.
+
+If it exists, parse the following fields:
+- `status` (string): current supervisor status
+- `started_at` (ISO timestamp): when the supervisor last started
+- `restart_count` (int): number of restarts since last start
+- `last_exit_code` (int or null): exit code of last subprocess exit
+- `backoff_seconds` (int or null): current backoff delay
+
+Map `status` to a display emoji:
+- `running` → `✅ Running`
+- `restarting` → `🔄 Restarting`
+- `halted` → `🚨 HALTED (emergency stop)`
+- `stopped` → `⏹ Stopped`
+- any other value → `❓ Unknown`
+
+If `supervisor_state.json` does not exist, skip this section entirely (supervisor not running or never started). Set a flag `supervisor_section_available = false`.
+
 ### Step 8: Generate Dashboard.md
 
 Write the following markdown to `AI_Employee_Vault/Dashboard.md` (overwrite existing content completely):
@@ -140,7 +160,23 @@ Write the following markdown to `AI_Employee_Vault/Dashboard.md` (overwrite exis
 
 ## Errors (Last 24 Hours)
 {errors_list}
+
+---
+
+## 🤖 Process Health
+
+{process_health_table_or_omit}
 ```
+
+If `supervisor_section_available` is true, replace `{process_health_table_or_omit}` with:
+
+```markdown
+| Component  | Status         | Since                | Restarts |
+|------------|----------------|----------------------|----------|
+| Supervisor | {status_emoji} | {started_at}         | {restart_count} |
+```
+
+If `supervisor_section_available` is false, omit the entire `## 🤖 Process Health` section from the output.
 
 ### Step 9: Log Dashboard Update
 

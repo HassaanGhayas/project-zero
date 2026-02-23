@@ -231,6 +231,9 @@ See `.specify/memory/constitution.md` for code quality, testing, performance, se
 - Add Safety Rules section (read-only, idempotent, no data loss, graceful degradation)
 - Example triggers section for user-invocable skills
 
+## AGENTS.md
+Additional rules define inside @AGENTS.md must be followed.
+
 ## Active Technologies
 - **Python 3.12+** with watchdog>=4.0.0 (file monitoring), python-dotenv>=1.0.0 (config), pytest>=8.0.0 (testing)
 - **Claude Code CLI** with 3 skills (process-inbox, update-dashboard, vault-report)
@@ -238,10 +241,35 @@ See `.specify/memory/constitution.md` for code quality, testing, performance, se
 - **NDJSON logging** for append-only audit trails
 - **uv** for Python package management
 
+## Project-Level Skills (15 in `.claude/skills/`)
+1. audit-search - Search audit logs
+2. browser-use - Browser automation
+3. context7-efficient - Token-efficient library docs
+4. doc-coauthoring - Documentation workflow
+5. docx - Word document operations
+6. emergency-halt - Emergency stop mechanism
+7. internal-comms - Internal communications
+8. pdf - PDF manipulation
+9. pptx - PowerPoint operations
+10. process-inbox - AI Employee inbox processing
+11. skill-creator - Skill creation guide
+12. theme-factory - Artifact styling
+13. update-dashboard - Vault dashboard regeneration
+14. vault-report - Vault status reporting
+15. xlsx - Excel operations
+
+### System Skills (SpecKit Plus & Others)
+**SDD Workflow**: `/sp.specify` → `/sp.plan` → `/sp.tasks` → `/sp.implement` → `/sp.analyze`
+**Additional**: `/sp.adr`, `/sp.constitution`, `/sp.phr`, `/sp.taskstoissues`, `/sp.reverse-engineer`, `/sp.git.commit_pr`, `/sp.clarify`, `/sp.checklist`
+**Superpowers**: `/superpowers:brainstorming`, `/superpowers:test-driven-development`, `/superpowers:systematic-debugging`, `/superpowers:verification-before-completion`, `/superpowers:using-git-worktrees`, `/superpowers:dispatching-parallel-agents`, and 8 more
+**Development**: `/code-review:code-review`, `/feature-dev:feature-dev`, `/ralph-loop:ralph-loop`, `/claude-md-management:revise-claude-md`
+**Hugging Face**: Evaluation, CLI, datasets, tool-builder, trackio, jobs, paper-publisher, model-trainer
+
 ## Gotchas
 
 - **Hook schema**: Use `{"matcher": "Write(**/*.py)", "hooks": [{...}]}` format, not match/patterns arrays
 - **Parallel agents**: Background agents cannot use Bash/Write/Edit (permission errors) - implement in main session instead
 
 ## Recent Changes
+- **2026-02-09**: ✅ Silver Tier Phase 1 Planning - SDD-Loop workflow complete (Spec → Plan → Tasks) for Gmail integration. 58-task breakdown with MVP scope (Phases 1-3, 19 tasks, ~4 hours). Added MCP/plugin inventory to CLAUDE.md (6 MCP servers, 16 plugins, 15 project skills, 50+ system skills)
 - **2026-02-08**: ✅ Bronze Tier complete + Automation (62/62 tasks) - File detection MVP, inbox processing, dashboard, status reports, test suite (87% passing), constitution compliant (13/13), 2 MCP servers (Playwright, Memory), 5 skills, 5 hooks, 1 subagent

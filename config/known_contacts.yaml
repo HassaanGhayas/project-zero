@@ -1,0 +1,99 @@
+# Known Contacts Whitelist for Gmail Integration
+#
+# This file controls email prioritization based on sender identity.
+# Used by email_categorizer.py to determine priority levels.
+#
+# Schema:
+#   - email: string (required) - Email address to match
+#   - name: string (required) - Human-readable contact name
+#   - category: enum (required) - One of: client | internal | vendor | newsletter
+#   - priority_override: enum (optional) - Override auto logic: high | medium | low
+#   - notes: string (optional) - Free-text context
+#
+# Priority Logic:
+#   1. If sender in known_contacts and priority_override set: use override
+#   2. Else if sender in known_contacts: default to "medium"
+#   3. Else (unknown sender): default to "high"
+#   4. If email has attachments: always elevate to "high"
+#   5. If email contains financial keywords: always "high"
+
+known_contacts:
+  # Trusted clients (medium priority by default)
+  - email: "alice.client@example.com"
+    name: "Alice Smith"
+    category: "client"
+    priority_override: null  # null = use default logic (medium)
+    notes: "Key account manager - responds within 24h"
+
+  - email: "charlie.client@acmecorp.com"
+    name: "Charlie Brown"
+    category: "client"
+    priority_override: "medium"
+    notes: "Project lead for ACME integration"
+
+  # Internal team members (medium priority)
+  - email: "bob@company.com"
+    name: "Bob Johnson"
+    category: "internal"
+    priority_override: "medium"
+    notes: "Engineering lead"
+
+  - email: "sarah@company.com"
+    name: "Sarah Davis"
+    category: "internal"
+    priority_override: null
+    notes: "Product manager"
+
+  # Newsletters (always low priority)
+  - email: "noreply@techweekly.com"
+    name: "Tech Weekly Newsletter"
+    category: "newsletter"
+    priority_override: "low"
+    notes: "Subscribed 2025-01-01, review monthly"
+
+  - email: "updates@github.com"
+    name: "GitHub Notifications"
+    category: "newsletter"
+    priority_override: "low"
+    notes: "Automated notifications"
+
+  - email: "no-reply@linkedin.com"
+    name: "LinkedIn Updates"
+    category: "newsletter"
+    priority_override: "low"
+    notes: "Weekly digest emails"
+
+  # Vendors (high priority for important updates)
+  - email: "support@cloudvendor.com"
+    name: "Cloud Vendor Support"
+    category: "vendor"
+    priority_override: "high"
+    notes: "Critical infrastructure provider - SLA: 1 hour response"
+
+  - email: "billing@stripe.com"
+    name: "Stripe Billing"
+    category: "vendor"
+    priority_override: "high"
+    notes: "Payment processor - financial alerts"
+
+# Financial keywords that trigger "financial" category
+# Emails containing these words in subject/snippet are always high priority
+financial_keywords:
+  - "payment"
+  - "invoice"
+  - "billing"
+  - "transaction"
+  - "refund"
+  - "subscription"
+  - "charges"
+  - "receipt"
+  - "purchase"
+  - "order confirmation"
+  - "payment due"
+  - "account balance"
+
+# Auto-archive rules (Phase 2+ feature, not used in MVP)
+# auto_archive_rules:
+#   - category: "newsletter"
+#     after_days: 7
+#     action: "archive"

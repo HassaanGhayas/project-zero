@@ -264,8 +264,8 @@ This is a Bronze Tier simulated execution. In Silver/Gold tiers, real external a
         """
         Execute the action based on file type and category.
 
-        For Bronze Tier, this is simulated. In Silver/Gold tiers,
-        this would call actual MCP servers for email, payments, etc.
+        For email actions (Silver Tier), calls Gmail MCP server.
+        For other types (Bronze Tier), simulated execution.
 
         Args:
             action_file: Path to action file
@@ -278,13 +278,16 @@ This is a Bronze Tier simulated execution. In Silver/Gold tiers, real external a
         category = frontmatter.get("category", "unknown")
         original_name = frontmatter.get("original_name", "unknown")
 
-        # Bronze Tier: Simulated execution
+        # Silver Tier: Email execution via Gmail MCP server (T030-T031)
+        if file_type == "email":
+            return self._execute_email_action(action_file, frontmatter)
+
+        # Bronze Tier: Simulated execution for other file types
         result_messages = {
             "text": f"✅ Text file '{original_name}' processed and archived.",
             "data": f"✅ Data file '{original_name}' validated and stored.",
             "image": f"✅ Image file '{original_name}' processed and cataloged.",
             "document": f"✅ Document '{original_name}' reviewed and filed.",
-            "email": f"✅ [SIMULATED] Email regarding '{original_name}' would be sent here.",
             "payment": f"✅ [SIMULATED] Payment for '{original_name}' would be processed here.",
             "unknown": f"⚠️  File '{original_name}' marked for manual review."
         }
@@ -294,6 +297,97 @@ This is a Bronze Tier simulated execution. In Silver/Gold tiers, real external a
         self.logger.info(f"Executed action for {action_file.name}: {result}")
 
         return result
+
+    def _execute_email_action(self, action_file: Path, frontmatter: dict) -> str:
+        """
+        Execute email action via Gmail MCP server (T031).
+
+        Calls Gmail MCP server to archive email and mark as read.
+
+        Args:
+            action_file: Path to email action file
+            frontmatter: YAML frontmatter containing gmail_message_id
+
+        Returns:
+            Execution result message with MCP server response
+        """
+        import json
+        import subprocess
+
+        gmail_message_id = frontmatter.get("gmail_message_id")
+        sender = frontmatter.get("sender", "unknown")
+        subject = frontmatter.get("subject", "No subject")
+
+        if not gmail_message_id:
+            error_msg = "❌ Missing gmail_message_id in action file"
+            self.logger.error(error_msg)
+            return error_msg
+
+        try:
+            # Call Gmail MCP server to archive email
+            mcp_request = {
+                "tool": "archive_email",
+                "arguments": {"message_id": gmail_message_id}
+            }
+
+            # Execute MCP server via subprocess
+            result = subprocess.run(
+                ["python", str(self.vault_path.parent / "src" / "mcp" / "gmail_server.py")],
+                input=json.dumps(mcp_request) + "\n",
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error_msg = f"❌ MCP server error: {result.stderr}"
+                self.logger.error(error_msg)
+                return error_msg
+
+            # Parse MCP response
+            mcp_response = json.loads(result.stdout.strip())
+
+            # Log email_executed event (T033)
+            self._log_action(
+                action_type="email_executed",
+                target=str(action_file),
+                parameters={
+                    "gmail_message_id": gmail_message_id,
+                    "sender": sender,
+                    "subject": subject,
+                    "mcp_action": mcp_response.get("action"),
+                    "mcp_status": mcp_response.get("status"),
+                    "mcp_timestamp": mcp_response.get("timestamp")
+                }
+            )
+
+            # Format result message
+            if mcp_response.get("status") == "success":
+                action = mcp_response.get("action", "processed")
+                result_msg = f"✅ Email '{subject}' {action}\n\n**From**: {sender}\n**Message ID**: {gmail_message_id}\n**Result**: {action}\n**Timestamp**: {mcp_response.get('timestamp', 'unknown')}"
+                self.logger.info(f"Email action executed successfully: {gmail_message_id}")
+                return result_msg
+            else:
+                error_code = mcp_response.get("error_code", "UNKNOWN")
+                error_message = mcp_response.get("error_message", "Unknown error")
+                error_msg = f"❌ Gmail MCP error ({error_code}): {error_message}\n\n**Message ID**: {gmail_message_id}"
+                self.logger.error(error_msg)
+                return error_msg
+
+        except subprocess.TimeoutExpired:
+            error_msg = f"❌ MCP server timeout (30s) for message {gmail_message_id}"
+            self.logger.error(error_msg)
+            return error_msg
+
+        except json.JSONDecodeError as e:
+            error_msg = f"❌ Failed to parse MCP response: {e}"
+            self.logger.error(error_msg)
+            return error_msg
+
+        except Exception as e:
+            error_msg = f"❌ Unexpected error executing email action: {e}"
+            self.logger.error(error_msg, exc_info=True)
+            return error_msg
 
     def _process_approved_file(self, file_path: Path) -> None:
         """
